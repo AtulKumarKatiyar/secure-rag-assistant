@@ -1,6 +1,0 @@
-server:
-  port: 8081
-
-security:
-  jwt:
-    secret: "change-me-change-me-change-me-change-me-32"

@@ -24,7 +24,7 @@ class TokenService {
     private final JwtEncoder encoder;
     private final Supplier<Instant> now;
     private final Map<String, DemoUser> users = Map.of(
-            "alice", new DemoUser("password", "1001", Set.of("leave:read", "profile:read")),
+            "alice", new DemoUser("password", "1001", Set.of("leave:read", "profile:read", "stock-news:read")),
             "ben", new DemoUser("password", "1002", Set.of("profile:read")));
 
     TokenService(TokenBrokerApplication.JwtSettings settings, JwtEncoder encoder, Supplier<Instant> now) {

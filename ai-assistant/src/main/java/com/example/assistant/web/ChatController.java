@@ -1,99 +1,71 @@
 package com.example.assistant.web;
 
-import com.example.assistant.rag.PolicyRetriever;
-import com.example.assistant.rag.RetrievedChunk;
-import com.example.assistant.tool.EmployeeTools;
+import com.example.assistant.orchestration.AgentOrchestrator;
+import com.example.assistant.orchestration.ChatOrchestrator;
+import org.springframework.ai.document.Document;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 @RestController
 class ChatController {
-    private final PolicyRetriever policyRetriever;
-    private final EmployeeTools employeeTools;
-    private final ExecutorService toolExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
-    ChatController(PolicyRetriever policyRetriever, EmployeeTools employeeTools) {
-        this.policyRetriever = policyRetriever;
-        this.employeeTools = employeeTools;
+    private final ChatOrchestrator routerOrchestrator;
+    private final AgentOrchestrator agentOrchestrator;
+
+    @Value("${assistant.mode:router}")
+    private String mode;
+
+    ChatController(ChatOrchestrator routerOrchestrator,
+                   AgentOrchestrator agentOrchestrator) {
+        this.routerOrchestrator = routerOrchestrator;
+        this.agentOrchestrator = agentOrchestrator;
     }
 
     @PostMapping("/chat")
     ChatResponse chat(@RequestBody ChatRequest request) {
-        var question = request.message();
-        var lower = question.toLowerCase(Locale.ROOT);
-        var futures = new ArrayList<CompletableFuture<ToolResult>>();
-
-        if (mentionsLeaveBalance(lower)) {
-            futures.add(CompletableFuture.supplyAsync(
-                    () -> new ToolResult("getLeaveBalance", employeeTools.getLeaveBalance(request.employeeId())),
-                    toolExecutor));
-        }
-        if (mentionsProfile(lower)) {
-            futures.add(CompletableFuture.supplyAsync(
-                    () -> new ToolResult("getProfile", employeeTools.getProfile(request.employeeId())),
-                    toolExecutor));
+        if ("agent".equalsIgnoreCase(mode)) {
+            var answer = agentOrchestrator.chat(request.message());
+            return new ChatResponse(answer, List.of(), List.of(), "AGENT", "agent-mode");
         }
 
-        var chunks = shouldRetrievePolicy(lower) ? policyRetriever.retrieve(question, 3) : List.<RetrievedChunk>of();
-        var toolResults = futures.stream().map(CompletableFuture::join).toList();
+        var r = routerOrchestrator.chat(request.message());
 
-        return new ChatResponse(composeAnswer(question, chunks, toolResults), citations(chunks), toolResults);
+        var citations = r.ragChunks().stream()
+            .map(ChatController::toCitation)
+            .toList();
+        var tools = r.liveData() == null
+            ? List.<ToolResult>of()
+            : List.of(new ToolResult("stock-news-api", r.liveData()));
+
+        return new ChatResponse(
+            r.answer(),
+            citations,
+            tools,
+            r.decision().route().name(),
+            r.decision().reason());
     }
 
-    private static boolean mentionsLeaveBalance(String lower) {
-        return lower.contains("leave") && (lower.contains("balance") || lower.contains("left") || lower.contains("days"));
+    private static Citation toCitation(Document d) {
+        var meta = d.getMetadata();
+        return new Citation(
+            String.valueOf(meta.getOrDefault("id", "unknown")),
+            String.valueOf(meta.getOrDefault("title", "chunk")),
+            0.0);
     }
 
-    private static boolean mentionsProfile(String lower) {
-        return lower.contains("profile") || lower.contains("department") || lower.contains("title");
-    }
+    record ChatRequest(String employeeId, String message) {}
 
-    private static boolean shouldRetrievePolicy(String lower) {
-        return lower.contains("policy") || lower.contains("leave") || lower.contains("benefit")
-                || lower.contains("expense") || lower.contains("remote") || lower.contains("travel")
-                || lower.contains("security") || lower.contains("parental");
-    }
+    record ChatResponse(String answer,
+                        List<Citation> citations,
+                        List<ToolResult> toolResults,
+                        String route,
+                        String reason) {}
 
-    private static String composeAnswer(String question, List<RetrievedChunk> chunks, List<ToolResult> toolResults) {
-        var answer = new StringBuilder();
-        if (!chunks.isEmpty()) {
-            answer.append("Policy context: ");
-            chunks.forEach(chunk -> answer.append(chunk.text()).append(" "));
-        }
-        toolResults.forEach(tool -> answer.append("Backend result from ")
-                .append(tool.name())
-                .append(": ")
-                .append(tool.result())
-                .append(" "));
-        if (answer.isEmpty()) {
-            answer.append("I do not have enough policy or employee-system context to answer: ").append(question);
-        }
-        return answer.toString().trim();
-    }
+    record Citation(String documentId, String title, double score) {}
 
-    private static List<Citation> citations(List<RetrievedChunk> chunks) {
-        return chunks.stream()
-                .map(chunk -> new Citation(chunk.documentId(), chunk.title(), chunk.score()))
-                .toList();
-    }
-
-    record ChatRequest(String employeeId, String message) {
-    }
-
-    record ChatResponse(String answer, List<Citation> citations, List<ToolResult> toolResults) {
-    }
-
-    record Citation(String documentId, String title, double score) {
-    }
-
-    record ToolResult(String name, Object result) {
-    }
+    record ToolResult(String name, Object result) {}
 }

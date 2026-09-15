@@ -18,7 +18,7 @@
     <name>Secure RAG Assistant over Enterprise Data</name>
 
     <modules>
-        <module>mock-ec-backend</module>
+        <module>mock-stock-api</module>
         <module>token-broker</module>
         <module>ai-assistant</module>
         <module>evaluation-harness</module>

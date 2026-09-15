@@ -3,8 +3,20 @@ server:
 
 services:
   token-broker-url: "http://localhost:8082"
-  ec-backend-url: "http://localhost:8081"
+  stock-api-url:    "http://localhost:8083"
 
 assistant:
+  mode: router
   demo-user: "alice"
   demo-password: "password"
+
+spring:
+  ai:
+    ollama:
+      base-url: "http://localhost:11434"
+      chat:
+        options:
+          model: llama3.2
+      embedding:
+        options:
+          model: nomic-embed-text
