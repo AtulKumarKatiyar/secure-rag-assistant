@@ -1,0 +1,5 @@
+# Security Training Policy
+
+All employees must complete annual security awareness training. Employees with production access must complete secure coding and incident response modules before receiving access.
+
+Suspected phishing, lost devices, or accidental exposure of confidential data must be reported to Security within 24 hours.

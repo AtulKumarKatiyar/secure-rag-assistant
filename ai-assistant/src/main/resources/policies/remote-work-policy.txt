@@ -1,0 +1,5 @@
+# Remote Work Policy
+
+Employees may work remotely up to three days per week when their role allows it and their manager approves the arrangement. Remote employees must remain reachable during core collaboration hours from 10:00 to 15:00 local office time.
+
+Company laptops must use disk encryption, endpoint protection, and automatic screen lock. Sensitive customer or employee data must not be downloaded to personal devices.

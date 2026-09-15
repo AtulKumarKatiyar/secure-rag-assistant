@@ -1,0 +1,5 @@
+# Expense Policy
+
+Business expenses must be submitted within 30 days with an itemized receipt. Meals over 75 USD require the attendee list and business purpose. Alcohol is not reimbursable unless pre-approved by Finance.
+
+Home office equipment reimbursement is capped at 300 USD per year for eligible remote employees.

@@ -1,0 +1,16 @@
+com/example/assistant/web/ChatController$Citation.class
+com/example/assistant/rag/RetrievedChunk.class
+com/example/assistant/tool/EmployeeTools$TokenRequest.class
+com/example/assistant/AiAssistantApplication.class
+com/example/assistant/tool/EmployeeTools$LeaveBalance.class
+com/example/assistant/tool/EmployeeTools$EmployeeProfile.class
+com/example/assistant/AiAssistantApplication$ServiceSettings.class
+com/example/assistant/tool/EmployeeTools.class
+com/example/assistant/rag/PolicyRetriever$IndexedChunk.class
+com/example/assistant/web/ChatController$ToolResult.class
+com/example/assistant/web/ChatController$ChatResponse.class
+com/example/assistant/rag/PolicyRetriever.class
+com/example/assistant/web/ChatController.class
+com/example/assistant/rag/PolicyDocument.class
+com/example/assistant/tool/EmployeeTools$TokenResponse.class
+com/example/assistant/web/ChatController$ChatRequest.class

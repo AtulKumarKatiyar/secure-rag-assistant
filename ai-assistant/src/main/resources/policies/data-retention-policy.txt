@@ -1,0 +1,5 @@
+# Data Retention Policy
+
+Employee records are retained according to legal, tax, and operational requirements. Access to employee records is limited to authorized People Operations, Legal, Finance, and manager workflows.
+
+Exported reports containing personal data must be deleted when the business purpose is complete.

@@ -1,0 +1,8 @@
+com/example/eval/EvaluationRunner$JudgeScore.class
+com/example/eval/EvaluationRunner$ChatResponse.class
+com/example/eval/EvaluationRunner$ChatRequest.class
+com/example/eval/EvaluationHarnessApplication.class
+com/example/eval/EvaluationRunner$Citation.class
+com/example/eval/EvaluationRunner.class
+com/example/eval/EvaluationRunner$GoldenCase.class
+com/example/eval/EvaluationRunner$ToolResult.class
