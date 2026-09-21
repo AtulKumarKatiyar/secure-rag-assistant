@@ -6,7 +6,6 @@ services:
   stock-api-url:    "http://localhost:8083"
 
 assistant:
-  mode: router
   demo-user: "alice"
   demo-password: "password"
 
@@ -17,6 +16,7 @@ spring:
       chat:
         options:
           model: llama3.2
+          temperature: 0.1        # deterministic-ish for tool selection
       embedding:
         options:
           model: nomic-embed-text
