@@ -86,9 +86,20 @@ visibility, tenantId, entitlementGroup, ticker, documentType, source, publishedA
 Every retrieval must filter by tenant id before returning chunks:
 
 ```text
-(visibility == PUBLIC OR tenantId == currentTenant OR entitlementGroup IN userEntitlements)
+visibility == 'PUBLIC'
+  OR (visibility == 'TENANT_PRIVATE'         AND tenantId == currentTenant)
+  OR (visibility == 'ENTITLEMENT_RESTRICTED' AND entitlementGroup IN userEntitlements)
 AND ticker == requestedTicker
 ```
+
+The visibility scoping is load-bearing. Entitlement-restricted documents carry an empty `tenantId`,
+so folding the branches together as `visibility == PUBLIC OR tenantId == currentTenant OR ...` lets
+an anonymous caller match them through `tenantId == ''`. Each attribute comparison is therefore
+gated by its own visibility value, and the whole predicate is grouped before it is ANDed with the
+ticker and freshness clauses.
+
+The predicate is built as a typed expression tree rather than a string, so a tenant id or group name
+cannot alter the expression's meaning.
 
 This prevents one client from seeing another client's private research, filings, reports or commentary.
 
@@ -96,31 +107,31 @@ This prevents one client from seeing another client's private research, filings,
 
 The first implementation used `supports(message)` keyword checks inside each agent. That works for demos, but it is hard to defend in production because every agent owns a separate routing rule.
 
-The current implementation uses a central `AgentSelector`:
+The current implementation uses a central `AgentSelector` supervisor:
 
 ```text
 User message
-  -> AgentSelector
-  -> score every agent capability
-  -> select top agent or multi-agent fan-out
-  -> AgentOrchestrator calls selected agents
+  -> tiny deterministic fast path for obvious cases
+  -> LlmAgentSelector as the primary router
+  -> heuristic fallback only if the LLM router fails or returns no route
+  -> AgentOrchestrator calls selected agents in parallel
 ```
 
 Each agent now exposes an `AgentCapability`:
 
 ```text
-agentName, description, domains, keywords, examples
+agentName, description, exampleQueries
 ```
 
-The equity agent does not depend on a hardcoded company list. Queries such as `HSBC current price` are routed by combining:
+The capability object intentionally does not contain large keyword lists. The LLM router receives descriptions and example queries, so paraphrases such as these still route correctly:
 
 ```text
-ticker-like symbol detected in the raw user message
-+ market intent words such as price, quote, news, earnings, filing
-+ the equity agent capability profile
+How is HSBC doing?       -> equity-agent
+Is Tata Motors a buy?    -> equity-agent
+Apple vs gold            -> equity-agent + commodity-agent
 ```
 
-So a new listed symbol should not require a code deployment just to reach the right agent.
+Small keyword logic remains only as a low-latency fast path for obvious queries and as a last-resort fallback if the LLM router is unavailable. It is not the main intelligence of the router.
 
 The selector returns `agentSelections` in the `/chat` response so the route is auditable:
 
@@ -137,6 +148,22 @@ For a client interview, position this as the production pattern:
 - Low-confidence queries should either fan out to multiple agents or ask a clarification question.
 - Routing logs become evaluation data, so wrong routes can improve the capability registry over time.
 - Never let routing bypass authorization. Even if the wrong agent is selected, the tool and API scope checks still enforce access.
+
+## Parallel Agent Execution
+
+The orchestrator uses `CompletableFuture` with a bounded `agentExecutor` so selected agents run concurrently:
+
+```text
+index-agent      ----\
+commodity-agent  ----- CompletableFuture fan-out -> join -> composed answer
+equity-agent     ----/
+```
+
+This matters for cross-asset questions because index, equity and commodity agents may each call separate secured APIs or RAG searches.
+
+The executor propagates Spring request context into worker threads so request-scoped tenant context and tool tracing still work during parallel calls.
+
+Current build target is Java 17, so the implementation uses a bounded platform-thread pool. If the project moves to Java 21, the executor can be changed to `Executors.newVirtualThreadPerTaskExecutor()` for I/O-heavy agent calls, while keeping the same orchestrator code.
 
 ## Connector Access Classification
 
@@ -181,15 +208,22 @@ visibility == PUBLIC OR tenantId == clientA OR entitlementGroup == premium-resea
 - Multi-agent supervisor.
 - Equity, index and commodity agents.
 - Scoped tools for stock, index and commodity APIs.
-- Tenant context on chat requests.
-- Entitlement groups on chat requests.
+- JWT-authenticated `/chat` and `/rag/ingest`, with per-endpoint scopes.
+- Caller tenant and entitlement groups derived from verified JWT claims, never from the request body.
+- Fail-closed, visibility-scoped metadata filtering on every retrieval.
+- Ingestion and retrieval share one vector store; chunks are keyed by chunk id so re-ingestion overwrites.
+- Policy documents ingested through the same pipeline and served by `searchPolicies`.
+- Supervisor clarification requests surfaced to the caller instead of being silently re-routed.
+- Routing thresholds (`min-score`, `fanout-score-gap`, `max-agents`) actually applied.
 - Tenant-safe in-memory cache abstraction.
 - RAG query caching.
 - Tool response caching.
+- Live-API fallback with best-effort write-through into the vector store.
 - Keycloak-ready token broker under `prod` profile.
-- Keycloak issuer validation under `prod` profile for secured API.
+- Keycloak issuer validation under `prod` profile for the secured API and the assistant.
 - Downstream HTTP connect/read timeouts.
 - AWS/profile-based environment-variable config files.
+- Unit tests covering access control, routing, ingestion mapping and tool contracts.
 
 ## Still Needed For Full Production
 
@@ -199,4 +233,5 @@ visibility == PUBLIC OR tenantId == clientA OR entitlementGroup == premium-resea
 - Add Dockerfiles and ECS task definitions/CDK/Terraform.
 - Add OpenTelemetry/Micrometer tracing export to CloudWatch/X-Ray.
 - Add circuit breakers and retry policies.
-- Add production evaluation suite and load tests.
+- Finish the end-to-end evaluation suite: the harness now enforces its assertions, but it needs a
+  live stack (Ollama plus all three services) and load tests to run in CI.

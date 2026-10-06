@@ -41,13 +41,19 @@ public class DocumentFilter {
         if (document.rawText() == null || document.rawText().length() < MIN_DOCUMENT_LENGTH) {
             return false;
         }
+        if (!hasValidAccessMetadata(document)) {
+            return false;
+        }
+        // Policies are curated enterprise documents, not market data: they carry no ticker and
+        // are not subject to the market-source allowlist, staleness window or financial-signal
+        // heuristic. Access metadata is still mandatory, which is why it is checked first.
+        if (document.documentType() == DocumentType.POLICY) {
+            return true;
+        }
         if (document.ticker() == null || !TRACKED_TICKERS.contains(document.ticker().toUpperCase(Locale.ROOT))) {
             return false;
         }
         if (document.source() == null || !TRUSTED_SOURCES.contains(document.source())) {
-            return false;
-        }
-        if (!hasValidAccessMetadata(document)) {
             return false;
         }
         if (isStale(document)) {

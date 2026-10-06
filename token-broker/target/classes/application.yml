@@ -1,7 +1,0 @@
-server:
-  port: 8082
-
-security:
-  jwt:
-    secret: "change-me-change-me-change-me-change-me-32"
-    issuer: "mock-token-broker"

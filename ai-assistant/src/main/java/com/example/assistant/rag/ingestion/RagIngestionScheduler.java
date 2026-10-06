@@ -19,7 +19,14 @@ public class RagIngestionScheduler {
 
     @EventListener(ApplicationReadyEvent.class)
     public void seedMarketRagOnStartup() {
-        run();
+        // Ingestion depends on the embedding model. If that model is unreachable the assistant
+        // should still start and degrade to the live API, not fail its own boot sequence.
+        try {
+            run();
+        } catch (Exception e) {
+            log.warn("Startup RAG ingestion failed; the assistant will serve live data only "
+                    + "until ingestion succeeds: {}", e.toString());
+        }
     }
 
     @Scheduled(

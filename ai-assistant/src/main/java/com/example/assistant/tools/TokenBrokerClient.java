@@ -15,7 +15,7 @@ public class TokenBrokerClient {
     private final String demoPassword;
     private final String demoEmployeeId;
 
-    public TokenBrokerClient(@Qualifier("tokenBrokerClient") RestClient broker,
+    public TokenBrokerClient(@Qualifier("tokenBrokerRestClient") RestClient broker,
                              @Value("${assistant.demo-user}") String demoUser,
                              @Value("${assistant.demo-password}") String demoPassword,
                              @Value("${assistant.demo-employee-id:1001}") String demoEmployeeId) {

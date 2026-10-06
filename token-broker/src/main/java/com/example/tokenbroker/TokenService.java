@@ -17,6 +17,16 @@ import static com.example.tokenbroker.TokenController.InvalidCredentialsExceptio
 import static com.example.tokenbroker.TokenController.TokenRequest;
 import static com.example.tokenbroker.TokenController.TokenResponse;
 
+/**
+ * Local demo broker.
+ *
+ * <p>Tokens now carry {@code tenant_id} and {@code entitlement_groups} because the assistant reads
+ * the caller's tenant and entitlements from the verified token. Previously those values travelled
+ * in the {@code /chat} request body, which meant any caller could claim any tenant.
+ *
+ * <p>The granted scope set remains an intersection of what was requested and what the user is
+ * allowed, so requesting a scope never grants it.
+ */
 class TokenService implements AccessTokenService {
     private static final long TTL_SECONDS = 120;
 
@@ -24,13 +34,12 @@ class TokenService implements AccessTokenService {
     private final JwtEncoder encoder;
     private final Supplier<Instant> now;
     private final Map<String, DemoUser> users = Map.of(
-            "alice", new DemoUser("password", "1001", Set.of(
-                    "leave:read",
-                    "profile:read",
-                    "stock-news:read",
-                    "index-data:read",
-                    "commodity-data:read")),
-            "ben", new DemoUser("password", "1002", Set.of("profile:read")));
+            "alice", new DemoUser("password", "1001", "clientA", Set.of("premium-research"),
+                    Set.of("profile:read", "assistant:chat", "rag:ingest",
+                            "stock-news:read", "index-data:read", "commodity-data:read")),
+            "ben", new DemoUser("password", "1002", "clientB", Set.of(),
+                    Set.of("profile:read", "assistant:chat",
+                            "stock-news:read", "index-data:read", "commodity-data:read")));
 
     TokenService(TokenBrokerApplication.JwtSettings settings, JwtEncoder encoder, Supplier<Instant> now) {
         this.settings = settings;
@@ -58,6 +67,8 @@ class TokenService implements AccessTokenService {
                 .issuedAt(issuedAt)
                 .expiresAt(issuedAt.plusSeconds(TTL_SECONDS))
                 .claim("employee_id", request.employeeId())
+                .claim("tenant_id", user.tenantId())
+                .claim("entitlement_groups", List.copyOf(user.entitlementGroups()))
                 .claim("scope", String.join(" ", grantedScopes))
                 .build();
 
@@ -68,6 +79,10 @@ class TokenService implements AccessTokenService {
         return new TokenResponse(token.getTokenValue(), "Bearer", TTL_SECONDS, grantedScopes);
     }
 
-    record DemoUser(String password, String employeeId, Set<String> allowedScopes) {
+    record DemoUser(String password,
+                    String employeeId,
+                    String tenantId,
+                    Set<String> entitlementGroups,
+                    Set<String> allowedScopes) {
     }
 }

@@ -2,9 +2,7 @@ package com.example.assistant.orchestration;
 
 import java.util.List;
 
-public record AgentCapability(String agentName,
+public record AgentCapability(String name,
                               String description,
-                              List<String> domains,
-                              List<String> keywords,
-                              List<String> examples) {
+                              List<String> exampleQueries) {
 }

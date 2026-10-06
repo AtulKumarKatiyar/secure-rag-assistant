@@ -5,15 +5,31 @@ services:
   token-broker-url: "http://localhost:8082"
   stock-api-url:    "http://localhost:8083"
 
+# The assistant now authenticates its own callers. This secret must match the mock
+# token broker's security.jwt.secret for the local profile.
+security:
+  jwt:
+    secret: "change-me-change-me-change-me-change-me-32"
+
 assistant:
   demo-user: "alice"
   demo-password: "password"
   demo-employee-id: "1001"
+  rag:
+    top-k: 5
+    min-score: 0.75
+    # Historical questions need a window wider than a trading session.
+    max-age-hours: 720
   agent-routing:
     default-agent: "equity-agent"
     min-score: 3
     fanout-score-gap: 3
     max-agents: 3
+  agent-execution:
+    core-pool-size: 4
+    max-pool-size: 8
+    queue-capacity: 50
+    timeout-ms: 8000
 
 spring:
   ai:

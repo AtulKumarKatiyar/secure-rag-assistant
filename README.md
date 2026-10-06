@@ -81,6 +81,10 @@ The assistant never calls these APIs directly without a token. Each tool asks th
 Authorization: Bearer <jwt>
 ```
 
+The assistant's own endpoints are protected the same way: `/chat` requires `assistant:chat` and
+`/rag/ingest` requires `rag:ingest`, both validated against the broker's signing key locally and
+against the Keycloak issuer under the `prod` profile.
+
 ## RAG Ingestion
 
 The ingestion pipeline converts market sources into a common `RagDocument` model, filters bad/noisy records, chunks useful text and stores chunks with metadata.
@@ -94,8 +98,13 @@ DocumentFilter
  |
 DocumentChunker
  |
-MarketRagStore / VectorStore
+ChunkDocumentMapper
+ |
+VectorStore   <-- the same store RagSearchTool and PolicySearchTool read from
 ```
+
+Ingestion and retrieval share one store. Documents are written with the chunk id as their vector id,
+so re-ingesting a source overwrites rather than duplicating.
 
 Stored content types include:
 
@@ -112,20 +121,49 @@ Stored content types include:
 Typical metadata:
 
 ```text
-ticker, companyName, documentType, source, url, publishedAt, sector, sentiment
+ticker, companyName, documentType, source, url, publishedAt, publishedAtEpochMs, sector, sentiment
 ```
 
-Manual ingestion endpoint:
+Access metadata is assigned by the connector and preserved on every chunk:
+
+```text
+visibility, tenantId, entitlementGroup
+```
+
+Retrieval applies a fail-closed predicate built from the caller's verified claims:
+
+```text
+visibility == 'PUBLIC'
+  OR (visibility == 'TENANT_PRIVATE'         AND tenantId == <caller tenant>)
+  OR (visibility == 'ENTITLEMENT_RESTRICTED' AND entitlementGroup IN <caller groups>)
+```
+
+Each branch is scoped by its own visibility value. Entitlement-restricted documents carry an empty
+`tenantId`, so an unscoped `tenantId == ''` clause would hand them to every anonymous caller.
+
+Manual ingestion endpoint (requires the `rag:ingest` scope):
 
 ```bash
-curl -X POST http://localhost:8080/rag/ingest
+curl -X POST http://localhost:8080/rag/ingest -H "Authorization: Bearer $TOKEN"
 ```
+
+Startup and scheduled ingestion are also seeded automatically. If the embedding model is
+unreachable, ingestion logs a warning and the assistant degrades to the live API rather than failing
+to boot.
 
 ## Build
 
 ```bash
-mvn test
+mvn clean package
 ```
+
+Each module produces an executable Spring Boot jar:
+
+```bash
+java -jar token-broker/target/token-broker-0.1.0-SNAPSHOT.jar
+```
+
+Unit tests run as part of the build. `mvn test` runs them alone.
 
 ## Run Locally
 
@@ -151,12 +189,44 @@ model: llama3.2
 embedding model: nomic-embed-text
 ```
 
+## Authentication
+
+The assistant no longer trusts its callers. `POST /chat` requires a bearer token issued by the
+token broker, and the caller's tenant and entitlement groups are read from that token's verified
+claims — they are **not** accepted from the request body.
+
+| Endpoint | Required scope |
+| --- | --- |
+| `POST /chat` | `assistant:chat` |
+| `POST /rag/ingest` | `rag:ingest` |
+
+Each demo user carries its own tenant and entitlements:
+
+| User | Employee | Tenant | Entitlement groups |
+| --- | --- | --- | --- |
+| `alice` | `1001` | `clientA` | `premium-research` |
+| `ben` | `1002` | `clientB` | none |
+
+Get a token once and reuse it (tokens live for 120 seconds):
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8082/token \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"alice","password":"password","employeeId":"1001","scopes":["assistant:chat"]}' \
+  | sed -E 's/.*"accessToken":"([^"]+)".*/\1/')
+```
+
+The tools mint their own separate service tokens for downstream market-data calls, requesting only
+market-data scopes. Those tokens never carry `assistant:chat`, so they cannot be replayed against
+`/chat`.
+
 ## Example Questions
 
-Equity:
+The request body carries only the message. Equity:
 
 ```bash
 curl -s -X POST http://localhost:8080/chat \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"message":"Summarize recent AAPL news and current price"}'
 ```
@@ -165,6 +235,7 @@ Index:
 
 ```bash
 curl -s -X POST http://localhost:8080/chat \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"message":"What is NIFTY 50 doing and what are the top constituents?"}'
 ```
@@ -173,6 +244,7 @@ Commodity:
 
 ```bash
 curl -s -X POST http://localhost:8080/chat \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"message":"Give me the latest gold and crude oil data"}'
 ```
@@ -181,17 +253,41 @@ Cross-asset:
 
 ```bash
 curl -s -X POST http://localhost:8080/chat \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"message":"Compare NIFTY with gold and Brent crude today"}'
 ```
 
+Policy documents are retrieved through the same RAG path:
+
+```bash
+curl -s -X POST http://localhost:8080/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"What is the remote work policy?"}'
+```
+
+The response includes `toolTrace` (every tool call, its arguments, result and duration),
+`agentSelections` (which specialist agents were chosen and why), `agentCount`, and
+`needsClarification`. When the supervisor cannot confidently route a question it sets
+`needsClarification=true` and returns a clarifying question instead of guessing.
+
 ## Production Upgrade Path
+
+Already handled in this build:
+
+- Caller identity comes from a verified JWT; tenant and entitlements are never taken from the body.
+- Every retrieval applies a tenant- and entitlement-aware metadata filter.
+- Ingestion deduplicates by chunk id and applies a freshness window.
+
+Still to do:
 
 - Replace the mock token broker with Keycloak:
   - broker calls Keycloak `token-uri`
-  - secured API validates Keycloak `issuer-uri`
-- Replace in-memory vector store with pgvector, OpenSearch, Pinecone or another enterprise vector DB.
-- Add tenant-aware metadata filters for client isolation.
+  - secured API and the assistant validate the Keycloak `issuer-uri` (already wired under the `prod` profile)
+- Replace the in-memory vector store with pgvector, Qdrant, OpenSearch or another enterprise vector DB.
+- Replace the in-memory cache with Redis/ElastiCache.
+- Move ingestion onto SQS/EventBridge with dead-letter queues.
 - Add Micrometer tracing around supervisor routing, tool calls, token minting and RAG retrieval.
 - Add retries, timeouts, circuit breakers and structured error codes for every tool call.
-- Add deduplication and freshness policies to ingestion.
+- Add Dockerfiles and infrastructure definitions.
