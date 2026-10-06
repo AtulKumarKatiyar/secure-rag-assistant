@@ -5,3 +5,8 @@ security:
   jwt:
     secret: "change-me-change-me-change-me-change-me-32"
     issuer: "mock-token-broker"
+
+keycloak:
+  token-uri: "http://localhost:8180/realms/market-rag/protocol/openid-connect/token"
+  client-id: "market-assistant-client"
+  client-secret: "local-dev-secret"

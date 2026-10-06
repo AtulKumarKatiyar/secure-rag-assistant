@@ -1,0 +1,7 @@
+server:
+  port: ${PORT:8082}
+
+keycloak:
+  token-uri: ${KEYCLOAK_TOKEN_URI}
+  client-id: ${KEYCLOAK_CLIENT_ID}
+  client-secret: ${KEYCLOAK_CLIENT_SECRET}

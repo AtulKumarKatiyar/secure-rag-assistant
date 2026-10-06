@@ -1,0 +1,30 @@
+services:
+  token-broker-url: ${TOKEN_BROKER_URL}
+  stock-api-url: ${MARKET_API_URL}
+  connect-timeout-ms: ${DOWNSTREAM_CONNECT_TIMEOUT_MS:750}
+  read-timeout-ms: ${DOWNSTREAM_READ_TIMEOUT_MS:2500}
+
+assistant:
+  demo-user: ${ASSISTANT_SERVICE_USER:alice}
+  demo-password: ${ASSISTANT_SERVICE_PASSWORD:password}
+  demo-employee-id: ${ASSISTANT_SERVICE_EMPLOYEE_ID:1001}
+  agent-routing:
+    default-agent: ${AGENT_ROUTING_DEFAULT_AGENT:equity-agent}
+    min-score: ${AGENT_ROUTING_MIN_SCORE:3}
+    fanout-score-gap: ${AGENT_ROUTING_FANOUT_SCORE_GAP:3}
+    max-agents: ${AGENT_ROUTING_MAX_AGENTS:3}
+
+spring:
+  ai:
+    bedrock:
+      aws:
+        region: ${AWS_REGION:ap-south-1}
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      chat:
+        options:
+          model: ${CHAT_MODEL:llama3.2}
+          temperature: ${CHAT_TEMPERATURE:0.1}
+      embedding:
+        options:
+          model: ${EMBEDDING_MODEL:nomic-embed-text}

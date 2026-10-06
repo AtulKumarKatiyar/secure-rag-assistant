@@ -8,6 +8,12 @@ services:
 assistant:
   demo-user: "alice"
   demo-password: "password"
+  demo-employee-id: "1001"
+  agent-routing:
+    default-agent: "equity-agent"
+    min-score: 3
+    fanout-score-gap: 3
+    max-agents: 3
 
 spring:
   ai:

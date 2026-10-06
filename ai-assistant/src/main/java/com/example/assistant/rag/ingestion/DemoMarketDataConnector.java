@@ -6,6 +6,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import static com.example.assistant.rag.ingestion.AccessMetadataKeys.TENANT_ID;
+import static com.example.assistant.rag.ingestion.AccessMetadataKeys.VISIBILITY;
+
 @Component
 public class DemoMarketDataConnector implements DataSourceConnector {
     @Override
@@ -25,7 +28,7 @@ public class DemoMarketDataConnector implements DataSourceConnector {
                                 
                                 The news is relevant because investors are watching Apple's services margin, enterprise demand, and guidance for recurring revenue growth.
                                 """,
-                        Map.of("sector", "Technology", "sentiment", "positive")),
+                        publicMetadata(Map.of("sector", "Technology", "sentiment", "positive"))),
                 document(
                         "FILING-AAPL-10Q-001",
                         "AAPL",
@@ -40,7 +43,7 @@ public class DemoMarketDataConnector implements DataSourceConnector {
                                 
                                 The filing also discussed capital allocation, including dividend payments and share buyback authorization.
                                 """,
-                        Map.of("formType", "10-Q", "accessLevel", "PUBLIC")),
+                        publicMetadata(Map.of("formType", "10-Q", "accessLevel", "PUBLIC"))),
                 document(
                         "TRANSCRIPT-NVDA-001",
                         "NVDA",
@@ -55,7 +58,7 @@ public class DemoMarketDataConnector implements DataSourceConnector {
                                 
                                 Management also noted risks related to export controls, customer concentration, and the timing of new product ramps.
                                 """,
-                        Map.of("speaker", "Management", "quarter", "Q2")),
+                        publicMetadata(Map.of("speaker", "Management", "quarter", "Q2"))),
                 document(
                         "PROMOTER-RELIANCE-001",
                         "RELIANCE",
@@ -70,7 +73,7 @@ public class DemoMarketDataConnector implements DataSourceConnector {
                                 
                                 Investors often track promoter activity because promoter buying, selling, pledge releases, and shareholding changes can affect confidence and governance perception.
                                 """,
-                        Map.of("promoterName", "Promoter Group", "activity", "Bought shares")),
+                        publicMetadata(Map.of("promoterName", "Promoter Group", "activity", "Bought shares"))),
                 document(
                         "COMMENTARY-INFY-001",
                         "INFY",
@@ -85,7 +88,7 @@ public class DemoMarketDataConnector implements DataSourceConnector {
                                 
                                 This commentary is useful for understanding how promoter and founder perspectives align with earnings guidance and analyst expectations.
                                 """,
-                        Map.of("speaker", "Founder", "topic", "margin and growth")),
+                        publicMetadata(Map.of("speaker", "Founder", "topic", "margin and growth"))),
                 document(
                         "SHORT-NOISE-001",
                         "AAPL",
@@ -94,7 +97,7 @@ public class DemoMarketDataConnector implements DataSourceConnector {
                         "Tiny price alert",
                         "Mock Financial News",
                         "AAPL moved slightly in pre-market trading.",
-                        Map.of("sentiment", "neutral")));
+                        publicMetadata(Map.of("sentiment", "neutral"))));
     }
 
     private RagDocument document(String id,
@@ -116,5 +119,12 @@ public class DemoMarketDataConnector implements DataSourceConnector {
                 Instant.now(),
                 rawText,
                 metadata);
+    }
+
+    private Map<String, Object> publicMetadata(Map<String, Object> metadata) {
+        var out = new java.util.HashMap<String, Object>(metadata);
+        out.put(VISIBILITY, AccessVisibility.PUBLIC.name());
+        out.put(TENANT_ID, "");
+        return Map.copyOf(out);
     }
 }

@@ -1,12 +1,15 @@
 package com.example.assistant.tools;
 
+import com.example.assistant.cache.ProductionCache;
 import com.example.assistant.orchestration.ToolTraceRecorder;
+import com.example.assistant.web.TenantContext;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -19,13 +22,19 @@ public class RagSearchTool {
     private final VectorStore vectorStore;
     private final StockNewsTool stockNewsTool;
     private final ToolTraceRecorder trace;
+    private final ProductionCache cache;
+    private final TenantContext tenantContext;
 
     public RagSearchTool(VectorStore vectorStore,
                          StockNewsTool stockNewsTool,
-                         ToolTraceRecorder trace) {
+                         ToolTraceRecorder trace,
+                         ProductionCache cache,
+                         TenantContext tenantContext) {
         this.vectorStore = vectorStore;
         this.stockNewsTool = stockNewsTool;
         this.trace = trace;
+        this.cache = cache;
+        this.tenantContext = tenantContext;
     }
 
     @Tool(description = """
@@ -38,20 +47,30 @@ public class RagSearchTool {
         trace.start("searchStockNews");
         try {
             var upper = ticker.toUpperCase();
+            var key = tenantContext.tenantId() + ":" + String.join(",", tenantContext.entitlementGroups())
+                    + ":rag:" + upper + ":" + query.toLowerCase().trim();
+            var cached = cache.get(key);
+            if (cached.isPresent()) {
+                trace.record("searchStockNews", Map.of("ticker", upper, "query", query, "cache", "hit"), cached.get(), true);
+                return String.valueOf(cached.get());
+            }
             var hits = vectorStore.similaritySearch(
                     SearchRequest.builder()
                             .query(query)
                             .topK(5)
                             .filterExpression("ticker == '" + upper + "' && "
+                                    + accessFilterExpression() + " && "
                                     + "publishedAt >= '" + Instant.now().minusSeconds(6 * 3600) + "'")
                             .build());
 
             if (!hits.isEmpty() && score(hits.get(0)) >= MIN_SCORE) {
+                var serialized = serialize("RAG", upper, hits);
+                cache.put(key, serialized, Duration.ofMinutes(5));
                 trace.record("searchStockNews",
                         Map.of("ticker", upper, "query", query),
                         "RAG hit: " + hits.size() + " chunks",
                         true);
-                return serialize("RAG", upper, hits);
+                return serialized;
             }
 
             // ---- fallback: live API + write-through cache ----
@@ -62,7 +81,9 @@ public class RagSearchTool {
                     Map.of("ticker", upper, "query", query, "fallback", true),
                     "API fallback",
                     true);
-            return serialize("API→cached", upper, List.of());
+            var serialized = serialize("API cached", upper, List.of());
+            cache.put(key, serialized, Duration.ofMinutes(1));
+            return serialized;
 
         } catch (Exception e) {
             trace.record("searchStockNews", Map.of("ticker", ticker), e.getMessage(), false);
@@ -83,6 +104,17 @@ public class RagSearchTool {
         } catch (Exception e) {
             // Swallow — caching must never break the read path
         }
+    }
+
+    private String accessFilterExpression() {
+        var filter = new StringBuilder("(visibility == 'PUBLIC' || tenantId == '")
+                .append(tenantContext.tenantId())
+                .append("'");
+        tenantContext.entitlementGroups().forEach(group -> filter
+                .append(" || entitlementGroup == '")
+                .append(group)
+                .append("'"));
+        return filter.append(")").toString();
     }
 
     private static String serialize(String source, String ticker, List<Document> chunks) {

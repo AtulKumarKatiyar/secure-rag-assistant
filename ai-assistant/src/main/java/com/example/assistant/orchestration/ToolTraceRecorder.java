@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.context.annotation.RequestScope;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequestScope
 public class ToolTraceRecorder {
 
-    private final List<Map<String, Object>> records = new ArrayList<>();
+    private final List<Map<String, Object>> records = Collections.synchronizedList(new ArrayList<>());
     private final Map<String, Long> startedAt = new ConcurrentHashMap<>();
 
     public void start(String toolCallId) {
@@ -24,9 +25,8 @@ public class ToolTraceRecorder {
     }
 
     public void record(String tool, Object args, Object result, boolean ok) {
-        long dur = startedAt.remove(tool) == null
-                ? -1
-                : System.currentTimeMillis() - startedAt.get(tool);
+        Long start = startedAt.remove(tool);
+        long dur = start == null ? -1 : System.currentTimeMillis() - start;
         records.add(Map.of(
                 "tool", tool,
                 "args", String.valueOf(args),
@@ -37,7 +37,9 @@ public class ToolTraceRecorder {
     }
 
     public List<Map<String, Object>> trace() {
-        return List.copyOf(records);
+        synchronized (records) {
+            return List.copyOf(records);
+        }
     }
 
     private static String truncate(String s) {

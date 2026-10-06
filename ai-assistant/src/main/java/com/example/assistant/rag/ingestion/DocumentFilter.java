@@ -19,10 +19,13 @@ public class DocumentFilter {
             "Stock Exchange",
             "Internal Research",
             "Mock Financial News",
-            "Mock Exchange Disclosure");
+            "Mock Exchange Disclosure",
+            "Client Research Portal",
+            "Premium Vendor Research");
 
     private static final Set<String> TRACKED_TICKERS = Set.of(
-            "AAPL", "MSFT", "GOOGL", "TSLA", "NVDA", "RELIANCE", "INFY");
+            "AAPL", "MSFT", "GOOGL", "TSLA", "NVDA", "RELIANCE", "INFY",
+            "NIFTY50", "SENSEX", "SP500", "NASDAQ100", "GOLD", "SILVER", "BRENT", "WTI", "OIL");
 
     private final Clock clock;
 
@@ -44,10 +47,34 @@ public class DocumentFilter {
         if (document.source() == null || !TRUSTED_SOURCES.contains(document.source())) {
             return false;
         }
+        if (!hasValidAccessMetadata(document)) {
+            return false;
+        }
         if (isStale(document)) {
             return false;
         }
         return hasUsefulFinancialSignal(document.rawText());
+    }
+
+    private boolean hasValidAccessMetadata(RagDocument document) {
+        var visibilityValue = String.valueOf(document.metadata().getOrDefault(AccessMetadataKeys.VISIBILITY, ""));
+        if (visibilityValue.isBlank()) {
+            return false;
+        }
+        AccessVisibility visibility;
+        try {
+            visibility = AccessVisibility.valueOf(visibilityValue);
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
+        var tenantId = String.valueOf(document.metadata().getOrDefault(AccessMetadataKeys.TENANT_ID, ""));
+        var entitlementGroup = String.valueOf(document.metadata().getOrDefault(AccessMetadataKeys.ENTITLEMENT_GROUP, ""));
+
+        return switch (visibility) {
+            case PUBLIC -> tenantId.isBlank();
+            case TENANT_PRIVATE -> !tenantId.isBlank();
+            case ENTITLEMENT_RESTRICTED -> !entitlementGroup.isBlank();
+        };
     }
 
     private boolean isStale(RagDocument document) {
@@ -75,6 +102,10 @@ public class DocumentFilter {
                 || lower.contains("dividend")
                 || lower.contains("buyback")
                 || lower.contains("capex")
-                || lower.contains("debt");
+                || lower.contains("debt")
+                || lower.contains("commodity")
+                || lower.contains("price")
+                || lower.contains("valuation")
+                || lower.contains("sector");
     }
 }

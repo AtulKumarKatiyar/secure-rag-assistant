@@ -1,0 +1,9 @@
+server:
+  port: ${PORT:8083}
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}

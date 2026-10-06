@@ -17,14 +17,19 @@ import static com.example.tokenbroker.TokenController.InvalidCredentialsExceptio
 import static com.example.tokenbroker.TokenController.TokenRequest;
 import static com.example.tokenbroker.TokenController.TokenResponse;
 
-class TokenService {
+class TokenService implements AccessTokenService {
     private static final long TTL_SECONDS = 120;
 
     private final TokenBrokerApplication.JwtSettings settings;
     private final JwtEncoder encoder;
     private final Supplier<Instant> now;
     private final Map<String, DemoUser> users = Map.of(
-            "alice", new DemoUser("password", "1001", Set.of("leave:read", "profile:read", "stock-news:read")),
+            "alice", new DemoUser("password", "1001", Set.of(
+                    "leave:read",
+                    "profile:read",
+                    "stock-news:read",
+                    "index-data:read",
+                    "commodity-data:read")),
             "ben", new DemoUser("password", "1002", Set.of("profile:read")));
 
     TokenService(TokenBrokerApplication.JwtSettings settings, JwtEncoder encoder, Supplier<Instant> now) {
@@ -33,7 +38,8 @@ class TokenService {
         this.now = now;
     }
 
-    TokenResponse mint(TokenRequest request) {
+    @Override
+    public TokenResponse mint(TokenRequest request) {
         var user = users.get(request.username());
         if (user == null || !user.password().equals(request.password()) || !user.employeeId().equals(request.employeeId())) {
             throw new InvalidCredentialsException();

@@ -10,9 +10,9 @@ import java.util.List;
 
 @RestController
 class TokenController {
-    private final TokenService tokenService;
+    private final AccessTokenService tokenService;
 
-    TokenController(TokenService tokenService) {
+    TokenController(AccessTokenService tokenService) {
         this.tokenService = tokenService;
     }
 
