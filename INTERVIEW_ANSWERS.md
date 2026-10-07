@@ -275,8 +275,14 @@ literal terms such as ticker symbols, which embeddings handle poorly.
 
 **26. What if the embedding model changes?**
 **The entire index must be rebuilt.** Different models produce vectors in different spaces, so old and
-new vectors cannot be compared — retrieval degrades *silently* rather than erroring. This is the key
-risk when moving to Bedrock / Titan embeddings.
+new vectors cannot be compared. The two models also produce different vector lengths (768 vs 1024), and
+Spring AI throws on a length mismatch — but `RagSearchTool` deliberately catches retrieval exceptions
+so that an embedding outage degrades to the live API rather than failing the tool. So the exception is
+swallowed, logged as one WARN, and the tool quietly answers from the live API instead.
+
+That makes the symptom *"RAG stopped contributing"* rather than a crash — every tool trace reports
+`source: "API"`, and the only clue is a single warning line. This is the key risk when moving to
+Bedrock / Titan embeddings.
 
 **27. How do you stop stale content being retrieved?**
 At ingestion, market documents older than 180 days are rejected. At query time, a 30-day freshness

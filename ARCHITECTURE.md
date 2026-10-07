@@ -206,7 +206,96 @@ there is no string concatenation to escape.
 Tests evaluate the predicate exactly as `SimpleVectorStore` does (convert to SpEL, execute against
 metadata) rather than string-matching it.
 
-### 3.5 Live fallback and write-through
+### 3.5 Query-time filter composition (`marketFilter`)
+
+There are **two different kinds of filtering** in this system, and it is worth keeping them apart.
+
+| | `DocumentFilter` | `marketFilter` |
+| --- | --- | --- |
+| **When it runs** | At ingestion, once | On every question |
+| **What it decides** | What gets **into** the index | What comes **out** of it |
+| **Location** | `rag/ingestion/DocumentFilter` | `tools/RagSearchTool` |
+
+`DocumentFilter` answers *"is this document worth storing at all?"*. `marketFilter` answers *"which
+stored chunks may I return for this question?"*.
+
+`marketFilter` composes **three conditions joined by AND**:
+
+| Condition | Purpose |
+| --- | --- |
+| **Access** — `RagAccessFilter.groupedForCaller(tenant, entitlements)` | Who is allowed to see this chunk |
+| **Ticker** — `ticker == '<ticker>'` | Is it about the right instrument |
+| **Freshness** — `publishedAtEpochMs >= <now − max-age>` | Is it recent enough to be useful |
+
+The tree is assembled two operands at a time, because each `Filter.Expression` takes a left and a
+right:
+
+```java
+return new Filter.Expression(
+        Filter.ExpressionType.AND,
+        new Filter.Expression(Filter.ExpressionType.AND, access, tickerMatch),
+        freshEnough);
+```
+
+Which is `(access AND ticker) AND fresh` — since AND is associative, the same as
+`access AND ticker AND fresh`.
+
+**Why `access` arrives already grouped.** `groupedForCaller` returns a `Filter.Group`, not a bare
+expression, so it is already parenthesised before it is ANDed with the ticker clause. That bracket is
+load-bearing. SpEL binds `and` tighter than `or`, so without it:
+
+```text
+With brackets:     (A or B) and ticker = 'AAPL' and date >= X
+Without brackets:   A or B  and ticker = 'AAPL' and date >= X
+                        ^^ parsed as  A or (B and ticker and date)
+```
+
+In the second form any **public** document passes on the strength of `A` alone, regardless of ticker
+or date — a search for AAPL would happily return public chunks about NVIDIA from three years ago. The
+grouping is what keeps the three conditions genuinely ANDed.
+
+**What it renders to.** The vector store converts the tree into SpEL, evaluated against each
+document's metadata map:
+
+```java
+(#metadata['visibility'] == 'PUBLIC'
+  or (#metadata['visibility'] == 'TENANT_PRIVATE' and #metadata['tenantId'] == 'clientA')
+  or (#metadata['visibility'] == 'ENTITLEMENT_RESTRICTED' and #metadata['entitlementGroup'] == 'premium-research'))
+and #metadata['ticker'] == 'AAPL'
+and #metadata['publishedAtEpochMs'] >= 1759749600000
+```
+
+**Filtering happens before scoring, and before `top-k`.** This is the property that makes the design
+work. The order inside Spring AI's `SimpleVectorStore` is:
+
+```java
+this.store.values().stream()
+    .filter(documentFilterPredicate)                            // 1. filter by metadata
+    .map(content -> content.toDocument(cosineSimilarity(...)))  // 2. THEN score
+    .filter(document -> document.getScore() >= threshold)       // 3. drop weak scores
+    .sorted(...)                                                // 4. best first
+    .limit(request.getTopK())                                   // 5. keep top 5
+```
+
+So if 1,000 chunks exist and only 40 are AAPL chunks the caller may see, only those 40 are scored and
+the best 5 are taken. If the order were reversed — score everything, take the top 5, then filter — and
+the top 5 all happened to be another client's private documents, the search would return **nothing**,
+even though good public AAPL chunks sat just below them in the ranking. Filtering first spends `top-k`
+entirely on documents that are both relevant and permitted.
+
+**Why each condition exists.**
+
+- **Access** is the security condition. It is rebuilt from verified JWT claims on every call, never
+  cached and never taken from the request body. This is what makes a misrouted request harmless.
+- **Ticker** is a relevance guard — a search for Apple news should not return an NVIDIA transcript
+  merely because both read as technology.
+- **Freshness** is a usefulness guard — market commentary goes stale quickly.
+
+**The policy equivalent.** `PolicySearchTool` composes `AND(access, documentType == 'POLICY')` — no
+ticker and no freshness, because policies are not tied to an instrument and do not go stale after
+30 days. The access predicate is identical, because that part applies to every search.
+
+### 3.6 Live fallback and write-through
 
 `searchStockNews` searches the vector store first. If nothing clears `min-score` (0.75):
 

@@ -107,8 +107,19 @@ tiny.
 This is the most important operational consequence of moving to AWS, and the easiest to miss.
 
 Ingestion currently uses `nomic-embed-text`. Production uses Titan Text Embeddings v2. Those produce
-vectors in **different spaces**, so they cannot be mixed: a query embedded with Titan will not match
-documents embedded with nomic, and retrieval quality collapses silently rather than erroring.
+vectors in **different spaces**, so they cannot be mixed: a query embedded with Titan will never match
+documents embedded with nomic.
+
+The failure is easy to miss because **it does not look like a failure**. The two models also produce
+different vector lengths (768 vs 1024), and Spring AI's `EmbeddingMath.cosineSimilarity` throws
+`IllegalArgumentException("Vectors lengths must be equal")` on a mismatch — but `RagSearchTool`
+deliberately catches retrieval exceptions so an embedding outage degrades to the live API. So the
+exception is swallowed, logged as a single WARN, and the tool quietly answers from the live API
+instead.
+
+The visible symptom is therefore *"RAG stopped contributing"*, not a crash: every tool trace reports
+`source: "API"`, no ingested document is ever retrieved, and the only clue is one warning line at
+startup or first query. Worth knowing before you go looking for a bug in the retrieval logic.
 
 Moving to Bedrock therefore requires **re-ingesting the whole corpus**. Two existing design choices
 make that safe rather than messy:
