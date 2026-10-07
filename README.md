@@ -21,6 +21,7 @@ The demo uses a mock HS256 token broker so the secure path runs locally. In prod
 | [DEPLOYMENT.md](DEPLOYMENT.md) | AWS target architecture, service-by-service choices, networking and security, the embedding-model migration trap, gaps before deploy, phased migration path and cost considerations. |
 | [AGENT_ROUTING.md](AGENT_ROUTING.md) | Deep dive into how the right agent — or set of agents — is selected: tokenisation, scoring, the four routing tiers, the LLM supervisor, and verified worked examples. |
 | [INTERVIEW_QA.md](INTERVIEW_QA.md) | Anticipated questions with grounded answers, plus a demo script. |
+| [INTERVIEW_ANSWERS.md](INTERVIEW_ANSWERS.md) | Concise answers to the RAG, request-flow and multi-agent question sets, an explanation of recall@k and related retrieval/generation metrics, and the eight most likely questions. |
 | [PRODUCTION_NOTES.md](PRODUCTION_NOTES.md) | Model tuning, vector-store choice, caching, tenant-aware retrieval and the production gap list. |
 
 ## Modules
