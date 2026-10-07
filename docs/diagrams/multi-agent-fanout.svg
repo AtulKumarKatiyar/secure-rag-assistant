@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="520" viewBox="0 0 1120 520" role="img" aria-labelledby="title desc">
+  <title id="title">Multi-Agent Fan-Out</title>
+  <desc id="desc">Supervisor routes to specialist agents, which run in parallel.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#334155"/></marker>
+    <style>
+      .box{fill:#f8fafc;stroke:#334155;stroke-width:2;rx:12}
+      .agent{fill:#f0fdf4;stroke:#16a34a;stroke-width:2;rx:12}
+      .exec{fill:#eff6ff;stroke:#2563eb;stroke-width:2;rx:12}
+      .line{stroke:#334155;stroke-width:2.2;fill:none;marker-end:url(#arrow)}
+      .label{font:600 17px Arial,sans-serif;fill:#0f172a}
+      .small{font:14px Arial,sans-serif;fill:#334155}
+    </style>
+  </defs>
+  <text x="40" y="42" font-family="Arial,sans-serif" font-size="30" font-weight="700" fill="#0f172a">Multi-Agent Fan-Out</text>
+
+  <rect class="box" x="60" y="210" width="180" height="74"/><text class="label" x="104" y="242">User Query</text><text class="small" x="98" y="266">single / cross-asset</text>
+  <rect class="box" x="330" y="210" width="220" height="74"/><text class="label" x="376" y="242">Supervisor Router</text><text class="small" x="370" y="266">LLM + fallback selector</text>
+
+  <rect class="agent" x="650" y="90" width="190" height="70"/><text class="label" x="690" y="123">Equity Agent</text><text class="small" x="690" y="145">stocks + news</text>
+  <rect class="agent" x="650" y="210" width="190" height="70"/><text class="label" x="696" y="243">Index Agent</text><text class="small" x="698" y="265">benchmarks</text>
+  <rect class="agent" x="650" y="330" width="190" height="70"/><text class="label" x="675" y="363">Commodity Agent</text><text class="small" x="698" y="385">oil + gold</text>
+
+  <rect class="exec" x="905" y="210" width="170" height="74"/><text class="label" x="925" y="242">CompletableFuture</text><text class="small" x="942" y="266">bounded executor</text>
+  <rect class="box" x="450" y="435" width="230" height="64"/><text class="label" x="494" y="463">Join Results</text><text class="small" x="486" y="485">successful agent answers</text>
+  <rect class="box" x="765" y="435" width="260" height="64"/><text class="label" x="800" y="463">Final Response</text><text class="small" x="795" y="485">answer + citations + trace</text>
+
+  <path class="line" d="M240 247 H330"/>
+  <path class="line" d="M550 230 L650 125"/><text class="small" x="558" y="160">company / stock</text>
+  <path class="line" d="M550 247 H650"/><text class="small" x="570" y="235">index</text>
+  <path class="line" d="M550 265 L650 365"/><text class="small" x="558" y="340">gold / oil</text>
+  <path class="line" d="M840 125 L905 235"/>
+  <path class="line" d="M840 245 H905"/>
+  <path class="line" d="M840 365 L905 260"/>
+  <path class="line" d="M990 284 L565 435"/>
+  <path class="line" d="M680 467 H765"/>
+</svg>

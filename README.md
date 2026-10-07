@@ -16,7 +16,8 @@ The demo uses a mock HS256 token broker so the secure path runs locally. In prod
 | Document | Contents |
 | --- | --- |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Request flow, RAG pipeline, access predicate, multi-agent routing, security model, optimisations, architectural decisions and honest limitations. |
-| [DIAGRAMS.md](DIAGRAMS.md) | Mermaid HLD, LLD, RAG ingestion, tenant-aware retrieval, multi-agent fan-out and AWS deployment diagrams. |
+| [FLOW_WALKTHROUGH.md](FLOW_WALKTHROUGH.md) | One request traced end to end through every phase — authentication, agent selection, fan-out, RAG, live API, caching, metadata filtering and tenant segregation. |
+| [DIAGRAMS.md](DIAGRAMS.md) | IntelliJ-friendly SVG HLD, LLD, RAG ingestion, tenant-aware retrieval, multi-agent fan-out and AWS deployment diagrams. |
 | [AGENT_ROUTING.md](AGENT_ROUTING.md) | Deep dive into how the right agent — or set of agents — is selected: tokenisation, scoring, the four routing tiers, the LLM supervisor, and verified worked examples. |
 | [INTERVIEW_QA.md](INTERVIEW_QA.md) | Anticipated questions with grounded answers, plus a demo script. |
 | [PRODUCTION_NOTES.md](PRODUCTION_NOTES.md) | Model tuning, vector-store choice, caching, tenant-aware retrieval and the production gap list. |

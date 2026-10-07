@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="720" viewBox="0 0 1320 720" role="img" aria-labelledby="title desc">
+  <title id="title">High-Level Design</title>
+  <desc id="desc">High-level architecture for the secure multi-agent RAG assistant.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#334155"/>
+    </marker>
+    <style>
+      .box{fill:#f8fafc;stroke:#334155;stroke-width:2;rx:12}
+      .store{fill:#ecfeff;stroke:#0891b2;stroke-width:2;rx:12}
+      .sec{fill:#fff7ed;stroke:#ea580c;stroke-width:2;rx:12}
+      .agent{fill:#f0fdf4;stroke:#16a34a;stroke-width:2;rx:12}
+      .async{fill:#f5f3ff;stroke:#7c3aed;stroke-width:2;rx:12}
+      .line{stroke:#334155;stroke-width:2.2;fill:none;marker-end:url(#arrow)}
+      .label{font:600 17px Arial,sans-serif;fill:#0f172a}
+      .small{font:14px Arial,sans-serif;fill:#334155}
+      .edge{font:13px Arial,sans-serif;fill:#475569}
+    </style>
+  </defs>
+
+  <text x="40" y="42" font-family="Arial,sans-serif" font-size="30" font-weight="700" fill="#0f172a">High-Level Design</text>
+
+  <rect class="box" x="40" y="90" width="170" height="76"/>
+  <text class="label" x="82" y="122">Client</text>
+  <text class="small" x="72" y="146">POST /chat</text>
+
+  <rect class="box" x="300" y="82" width="230" height="92"/>
+  <text class="label" x="337" y="119">AI Assistant</text>
+  <text class="small" x="346" y="145">Service :8080</text>
+
+  <rect class="sec" x="600" y="60" width="190" height="74"/>
+  <text class="label" x="650" y="92">Keycloak</text>
+  <text class="small" x="624" y="116">JWT issuer / IdP</text>
+
+  <rect class="store" x="595" y="178" width="205" height="88"/>
+  <text class="label" x="642" y="212">Vector Store</text>
+  <text class="small" x="618" y="238">Qdrant / pgvector / OpenSearch</text>
+
+  <rect class="box" x="300" y="225" width="230" height="82"/>
+  <text class="label" x="342" y="258">Supervisor</text>
+  <text class="small" x="352" y="282">Agent Router</text>
+
+  <rect class="agent" x="165" y="385" width="185" height="74"/>
+  <text class="label" x="207" y="428">Equity Agent</text>
+
+  <rect class="agent" x="395" y="385" width="185" height="74"/>
+  <text class="label" x="440" y="428">Index Agent</text>
+
+  <rect class="agent" x="625" y="385" width="205" height="74"/>
+  <text class="label" x="660" y="428">Commodity Agent</text>
+
+  <rect class="sec" x="900" y="384" width="205" height="78"/>
+  <text class="label" x="944" y="416">Token Broker</text>
+  <text class="small" x="960" y="440">Service :8082</text>
+
+  <rect class="sec" x="1135" y="384" width="155" height="78"/>
+  <text class="label" x="1172" y="416">Market API</text>
+  <text class="small" x="1181" y="440">:8083</text>
+
+  <rect class="async" x="40" y="565" width="180" height="72"/>
+  <text class="label" x="74" y="596">Scheduler</text>
+  <text class="small" x="65" y="620">EventBridge</text>
+
+  <rect class="async" x="295" y="565" width="170" height="72"/>
+  <text class="label" x="347" y="596">SQS</text>
+  <text class="small" x="322" y="620">Ingestion queue</text>
+
+  <rect class="async" x="540" y="565" width="195" height="72"/>
+  <text class="label" x="576" y="596">Ingestion Worker</text>
+  <text class="small" x="584" y="620">filter, chunk, embed</text>
+
+  <rect class="box" x="820" y="565" width="260" height="72"/>
+  <text class="label" x="872" y="596">Data Sources</text>
+  <text class="small" x="850" y="620">news, filings, reports, transcripts</text>
+
+  <path class="line" d="M210 128 H300"/>
+  <text class="edge" x="226" y="116">JWT bearer token</text>
+
+  <path class="line" d="M530 106 H600"/>
+  <text class="edge" x="540" y="92">validate JWT</text>
+
+  <path class="line" d="M530 217 H595"/>
+  <text class="edge" x="536" y="203">retrieve chunks</text>
+
+  <path class="line" d="M415 174 V225"/>
+  <text class="edge" x="430" y="204">route query</text>
+
+  <path class="line" d="M365 307 L258 385"/>
+  <path class="line" d="M430 307 L488 385"/>
+  <path class="line" d="M500 307 L728 385"/>
+
+  <path class="line" d="M350 423 H395"/>
+  <path class="line" d="M580 423 H625"/>
+  <path class="line" d="M830 423 H900"/>
+  <text class="edge" x="842" y="410">needs live/private data</text>
+
+  <path class="line" d="M1105 423 H1135"/>
+  <text class="edge" x="1110" y="410">bearer</text>
+
+  <path class="line" d="M1002 384 V330 H695 V266"/>
+  <text class="edge" x="804" y="318">client credentials / token exchange</text>
+
+  <path class="line" d="M220 601 H295"/>
+  <path class="line" d="M465 601 H540"/>
+  <path class="line" d="M735 601 H820"/>
+  <path class="line" d="M638 565 V266"/>
+  <text class="edge" x="648" y="505">write vectors + metadata</text>
+
+  <path class="line" d="M300 147 L210 147"/>
+  <text class="edge" x="218" y="166">answer + citations + trace</text>
+</svg>

@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="760" viewBox="0 0 1260 760" role="img" aria-labelledby="title desc">
+  <title id="title">Production AWS View</title>
+  <desc id="desc">AWS deployment view for the assistant, token broker, market API, ingestion workers, Bedrock and storage.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#334155"/></marker>
+    <style>
+      .box{fill:#f8fafc;stroke:#334155;stroke-width:2;rx:12}
+      .aws{fill:#fff7ed;stroke:#ea580c;stroke-width:2;rx:12}
+      .data{fill:#ecfeff;stroke:#0891b2;stroke-width:2;rx:12}
+      .async{fill:#f5f3ff;stroke:#7c3aed;stroke-width:2;rx:12}
+      .line{stroke:#334155;stroke-width:2.2;fill:none;marker-end:url(#arrow)}
+      .label{font:600 17px Arial,sans-serif;fill:#0f172a}
+      .small{font:14px Arial,sans-serif;fill:#334155}
+    </style>
+  </defs>
+  <text x="40" y="42" font-family="Arial,sans-serif" font-size="30" font-weight="700" fill="#0f172a">Production AWS View</text>
+
+  <rect class="aws" x="60" y="90" width="180" height="70"/><text class="label" x="112" y="122">ALB</text><text class="small" x="86" y="145">public/private entry</text>
+  <rect class="aws" x="340" y="70" width="220" height="72"/><text class="label" x="382" y="102">ECS Fargate</text><text class="small" x="396" y="126">ai-assistant</text>
+  <rect class="aws" x="340" y="185" width="220" height="72"/><text class="label" x="382" y="217">ECS Fargate</text><text class="small" x="400" y="241">token-broker</text>
+  <rect class="aws" x="340" y="300" width="220" height="72"/><text class="label" x="382" y="332">ECS Fargate</text><text class="small" x="405" y="356">market-api</text>
+
+  <rect class="aws" x="690" y="55" width="235" height="76"/><text class="label" x="735" y="88">Amazon Bedrock</text><text class="small" x="748" y="112">Converse chat</text>
+  <rect class="aws" x="690" y="155" width="235" height="76"/><text class="label" x="735" y="188">Amazon Bedrock</text><text class="small" x="750" y="212">Titan embeddings</text>
+  <rect class="data" x="690" y="275" width="260" height="76"/><text class="label" x="748" y="308">Vector Store</text><text class="small" x="718" y="332">Qdrant / OpenSearch / pgvector</text>
+
+  <rect class="box" x="690" y="430" width="210" height="72"/><text class="label" x="752" y="462">Keycloak</text><text class="small" x="735" y="486">realms + clients</text>
+  <rect class="data" x="985" y="430" width="215" height="72"/><text class="label" x="1022" y="462">Aurora PostgreSQL</text><text class="small" x="1038" y="486">Keycloak DB</text>
+
+  <rect class="async" x="60" y="590" width="200" height="70"/><text class="label" x="104" y="622">EventBridge</text><text class="small" x="105" y="644">scheduled jobs</text>
+  <rect class="async" x="330" y="590" width="165" height="70"/><text class="label" x="392" y="622">SQS</text><text class="small" x="362" y="644">retry buffer</text>
+  <rect class="async" x="565" y="590" width="205" height="70"/><text class="label" x="615" y="622">ECS Worker</text><text class="small" x="605" y="644">ingestion pipeline</text>
+  <rect class="box" x="845" y="590" width="260" height="70"/><text class="label" x="902" y="622">Data Sources</text><text class="small" x="875" y="644">market APIs + client docs</text>
+
+  <rect class="aws" x="1010" y="95" width="185" height="70"/><text class="label" x="1044" y="127">CloudWatch</text><text class="small" x="1040" y="149">logs + metrics</text>
+
+  <path class="line" d="M240 125 H340"/>
+  <path class="line" d="M240 125 C285 125 285 221 340 221"/>
+  <path class="line" d="M560 106 H690"/>
+  <path class="line" d="M560 106 C615 106 615 193 690 193"/>
+  <path class="line" d="M560 336 H690"/>
+  <path class="line" d="M560 221 H690"/>
+  <path class="line" d="M900 466 H985"/>
+  <path class="line" d="M260 625 H330"/>
+  <path class="line" d="M495 625 H565"/>
+  <path class="line" d="M770 625 H845"/>
+  <path class="line" d="M668 590 C668 500 820 430 820 351"/>
+  <path class="line" d="M668 590 C668 450 808 330 808 231"/>
+  <path class="line" d="M560 142 C700 180 900 130 1010 130"/>
+  <path class="line" d="M560 257 C700 300 900 185 1010 150"/>
+  <path class="line" d="M560 372 C700 390 900 215 1010 155"/>
+</svg>

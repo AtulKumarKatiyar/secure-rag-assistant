@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="610" viewBox="0 0 1120 610" role="img" aria-labelledby="title desc">
+  <title id="title">Tenant-Aware Retrieval</title>
+  <desc id="desc">Tenant and entitlement filters applied to vector search results.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#334155"/></marker>
+    <style>
+      .box{fill:#f8fafc;stroke:#334155;stroke-width:2;rx:12}
+      .claim{fill:#fff7ed;stroke:#ea580c;stroke-width:2;rx:12}
+      .ok{fill:#f0fdf4;stroke:#16a34a;stroke-width:2;rx:12}
+      .store{fill:#ecfeff;stroke:#0891b2;stroke-width:2;rx:12}
+      .line{stroke:#334155;stroke-width:2.2;fill:none;marker-end:url(#arrow)}
+      .label{font:600 17px Arial,sans-serif;fill:#0f172a}
+      .small{font:14px Arial,sans-serif;fill:#334155}
+    </style>
+  </defs>
+  <text x="40" y="42" font-family="Arial,sans-serif" font-size="30" font-weight="700" fill="#0f172a">Tenant-Aware Retrieval</text>
+
+  <rect class="box" x="60" y="95" width="210" height="70"/><text class="label" x="110" y="126">User Query</text><text class="small" x="95" y="149">ticker / topic / intent</text>
+  <rect class="claim" x="390" y="95" width="240" height="70"/><text class="label" x="445" y="126">Verified JWT</text><text class="small" x="432" y="149">tenantId + entitlements</text>
+  <rect class="store" x="720" y="95" width="235" height="70"/><text class="label" x="760" y="126">Vector Search</text><text class="small" x="760" y="149">similarity + metadata</text>
+
+  <rect class="box" x="430" y="245" width="250" height="84"/><text class="label" x="478" y="278">Access Filter</text><text class="small" x="464" y="302">built from verified claims</text>
+
+  <rect class="ok" x="65" y="430" width="250" height="82"/><text class="label" x="118" y="462">PUBLIC</text><text class="small" x="96" y="486">visible to any caller</text>
+  <rect class="ok" x="395" y="430" width="250" height="82"/><text class="label" x="432" y="462">TENANT_PRIVATE</text><text class="small" x="423" y="486">tenantId = caller tenant</text>
+  <rect class="ok" x="725" y="430" width="285" height="82"/><text class="label" x="758" y="462">ENTITLEMENT_RESTRICTED</text><text class="small" x="765" y="486">group in caller entitlements</text>
+
+  <rect class="box" x="430" y="555" width="260" height="45"/><text class="label" x="462" y="584">Authorized context to LLM</text>
+
+  <path class="line" d="M270 130 H390"/>
+  <path class="line" d="M630 130 H720"/>
+  <path class="line" d="M837 165 L555 245"/>
+  <path class="line" d="M510 165 L555 245"/>
+  <path class="line" d="M555 329 L190 430"/>
+  <path class="line" d="M555 329 L520 430"/>
+  <path class="line" d="M555 329 L868 430"/>
+  <path class="line" d="M190 512 L510 555"/>
+  <path class="line" d="M520 512 V555"/>
+  <path class="line" d="M868 512 L610 555"/>
+</svg>

@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1420" height="880" viewBox="0 0 1420 880" role="img" aria-labelledby="title desc">
+  <title id="title">Chat Request Low-Level Design</title>
+  <desc id="desc">Sequence diagram for chat request processing.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#334155"/>
+    </marker>
+    <style>
+      .head{fill:#f8fafc;stroke:#334155;stroke-width:2;rx:10}
+      .life{stroke:#cbd5e1;stroke-width:2;stroke-dasharray:6 6}
+      .msg{stroke:#334155;stroke-width:2;fill:none;marker-end:url(#arrow)}
+      .return{stroke:#64748b;stroke-width:2;fill:none;stroke-dasharray:5 5;marker-end:url(#arrow)}
+      .label{font:600 15px Arial,sans-serif;fill:#0f172a}
+      .small{font:13px Arial,sans-serif;fill:#334155}
+      .band{fill:#eff6ff;stroke:#3b82f6;stroke-width:1.5;rx:10}
+    </style>
+  </defs>
+
+  <text x="40" y="42" font-family="Arial,sans-serif" font-size="30" font-weight="700" fill="#0f172a">Chat Request LLD</text>
+
+  <g>
+    <rect class="head" x="30" y="78" width="120" height="54"/><text class="label" x="72" y="112">User</text>
+    <rect class="head" x="178" y="78" width="150" height="54"/><text class="label" x="198" y="112">ChatController</text>
+    <rect class="head" x="356" y="78" width="150" height="54"/><text class="label" x="379" y="112">Security</text>
+    <rect class="head" x="534" y="78" width="160" height="54"/><text class="label" x="558" y="112">Orchestrator</text>
+    <rect class="head" x="722" y="78" width="150" height="54"/><text class="label" x="758" y="112">Selector</text>
+    <rect class="head" x="900" y="78" width="135" height="54"/><text class="label" x="946" y="112">RAG</text>
+    <rect class="head" x="1063" y="78" width="135" height="54"/><text class="label" x="1105" y="112">Agent</text>
+    <rect class="head" x="1226" y="78" width="150" height="54"/><text class="label" x="1250" y="112">Broker/API</text>
+  </g>
+
+  <g>
+    <line class="life" x1="90" y1="132" x2="90" y2="820"/>
+    <line class="life" x1="253" y1="132" x2="253" y2="820"/>
+    <line class="life" x1="431" y1="132" x2="431" y2="820"/>
+    <line class="life" x1="614" y1="132" x2="614" y2="820"/>
+    <line class="life" x1="797" y1="132" x2="797" y2="820"/>
+    <line class="life" x1="968" y1="132" x2="968" y2="820"/>
+    <line class="life" x1="1130" y1="132" x2="1130" y2="820"/>
+    <line class="life" x1="1301" y1="132" x2="1301" y2="820"/>
+  </g>
+
+  <path class="msg" d="M90 170 H253"/><text class="small" x="115" y="160">POST /chat with bearer token</text>
+  <path class="msg" d="M253 220 H431"/><text class="small" x="278" y="210">validate Keycloak JWT</text>
+  <path class="return" d="M431 270 H253"/><text class="small" x="284" y="260">claims: user, tenant, scopes</text>
+  <path class="msg" d="M253 320 H614"/><text class="small" x="308" y="310">chat(message, caller context)</text>
+  <path class="msg" d="M614 370 H797"/><text class="small" x="640" y="360">select agents</text>
+  <path class="msg" d="M797 420 C860 390 890 390 950 420"/><text class="small" x="822" y="382">Bedrock routing call</text>
+  <path class="return" d="M797 470 H614"/><text class="small" x="640" y="460">RoutingDecision</text>
+
+  <rect class="band" x="560" y="505" width="790" height="170"/>
+  <text class="label" x="590" y="532">Parallel work</text>
+  <path class="msg" d="M614 560 H968"/><text class="small" x="690" y="550">retrieve tenant-filtered chunks</text>
+  <path class="msg" d="M614 600 H1130"/><text class="small" x="745" y="590">execute selected domain agent</text>
+  <path class="msg" d="M1130 640 H1301"/><text class="small" x="1160" y="630">scoped token + API call</text>
+  <path class="return" d="M1301 665 H1130"/><text class="small" x="1182" y="655">live data</text>
+
+  <path class="msg" d="M614 720 C780 690 950 690 1130 720"/><text class="small" x="790" y="692">compose with Bedrock</text>
+  <path class="return" d="M614 765 H253"/><text class="small" x="340" y="755">answer + citations + tool trace</text>
+  <path class="return" d="M253 810 H90"/><text class="small" x="118" y="800">response</text>
+</svg>
