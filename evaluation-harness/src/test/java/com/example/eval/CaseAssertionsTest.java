@@ -26,7 +26,7 @@ class CaseAssertionsTest {
         var expectation = json("{\"expectAnyTool\":[\"getLiveStockPrice\",\"searchStockNews\"]}");
 
         assertThat(CaseAssertions.evaluate(expectation, traceOf("searchStockNews")).passed()).isTrue();
-        assertThat(CaseAssertions.evaluate(expectation, traceOf("searchPolicies")).passed()).isFalse();
+        assertThat(CaseAssertions.evaluate(expectation, traceOf("getIndexData")).passed()).isFalse();
     }
 
     @Test

@@ -10,9 +10,9 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Runs every {@link DataSourceConnector} through filter → chunk → embed → store.
  *
- * <p>Documents are written to the same {@link VectorStore} that {@code RagSearchTool} and
- * {@code PolicySearchTool} read from. Ingestion and retrieval must share one store: if they
- * diverge, every query silently falls back and the RAG path is inert.
+ * <p>Documents are written to the same {@link VectorStore} that {@code RagSearchTool} reads from.
+ * Ingestion and retrieval must share one store: if they diverge, every query silently falls back
+ * and the RAG path is inert.
  */
 @Service
 public class RagIngestionService {

@@ -3,7 +3,7 @@
 This project is an interview-ready Spring Boot demo for a secure financial assistant. It combines:
 
 - Multi-agent orchestration for equities, indexes and commodities.
-- RAG over stock news, filings, reports, transcripts, promoter activity and policy documents.
+- RAG over stock news, filings, reports, transcripts, promoter activity and commentary.
 - A protected mock market-data API.
 - A token broker that mints short-lived, narrowly scoped JWTs.
 - Spring AI tool calling with full tool trace visibility.
@@ -16,6 +16,8 @@ The demo uses a mock HS256 token broker so the secure path runs locally. In prod
 | Document | Contents |
 | --- | --- |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Request flow, RAG pipeline, access predicate, multi-agent routing, security model, optimisations, architectural decisions and honest limitations. |
+| [DIAGRAMS.md](DIAGRAMS.md) | Mermaid HLD, LLD, RAG ingestion, tenant-aware retrieval, multi-agent fan-out and AWS deployment diagrams. |
+| [AGENT_ROUTING.md](AGENT_ROUTING.md) | Deep dive into how the right agent — or set of agents — is selected: tokenisation, scoring, the four routing tiers, the LLM supervisor, and verified worked examples. |
 | [INTERVIEW_QA.md](INTERVIEW_QA.md) | Anticipated questions with grounded answers, plus a demo script. |
 | [PRODUCTION_NOTES.md](PRODUCTION_NOTES.md) | Model tuning, vector-store choice, caching, tenant-aware retrieval and the production gap list. |
 
@@ -108,7 +110,7 @@ DocumentChunker
  |
 ChunkDocumentMapper
  |
-VectorStore   <-- the same store RagSearchTool and PolicySearchTool read from
+VectorStore   <-- the same store RagSearchTool reads from
 ```
 
 Ingestion and retrieval share one store. Documents are written with the chunk id as their vector id,
@@ -121,7 +123,6 @@ Stored content types include:
 - Filings
 - Reports
 - Earnings transcripts
-- Policy documents
 - Analyst commentary
 - Promoter activity
 - Promoter commentary
@@ -264,15 +265,6 @@ curl -s -X POST http://localhost:8080/chat \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"message":"Compare NIFTY with gold and Brent crude today"}'
-```
-
-Policy documents are retrieved through the same RAG path:
-
-```bash
-curl -s -X POST http://localhost:8080/chat \
-  -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"message":"What is the remote work policy?"}'
 ```
 
 The response includes `toolTrace` (every tool call, its arguments, result and duration),

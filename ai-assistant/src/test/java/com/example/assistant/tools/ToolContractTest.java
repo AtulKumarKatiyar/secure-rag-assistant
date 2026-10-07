@@ -29,7 +29,6 @@ class ToolContractTest {
 
     private static final List<Class<?>> TOOL_COMPONENTS = List.of(
             RagSearchTool.class,
-            PolicySearchTool.class,
             StockNewsTool.class,
             IndexManagementTool.class,
             CommodityDataTool.class);

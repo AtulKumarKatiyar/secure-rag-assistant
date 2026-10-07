@@ -3,6 +3,8 @@
 Secure multi-agent RAG assistant over market data. This document describes what is built, how a
 request flows, and why the significant decisions were made.
 
+For presentation-ready Mermaid diagrams, see [DIAGRAMS.md](DIAGRAMS.md).
+
 ---
 
 ## 1. System at a glance
@@ -94,7 +96,6 @@ and not an iteration count.
 | Tool | Class | Backing source |
 | --- | --- | --- |
 | `searchStockNews` | `RagSearchTool` | Vector store, falling back to the secured API |
-| `searchPolicies` | `PolicySearchTool` | Vector store (policy documents) |
 | `getLiveStockNews` | `StockNewsTool` | Secured API, `stock-news:read` |
 | `getLiveStockPrice` | `StockNewsTool` | Secured API, `stock-news:read` |
 | `getIndexData` | `IndexManagementTool` | Secured API, `index-data:read` |
@@ -127,16 +128,15 @@ the caller can see which specialist said what.
 
 ### 3.1 Corpus
 
-20 documents across four connectors:
+10 documents across three connectors:
 
 | Connector | Docs | Visibility assigned |
 | --- | ---: | --- |
 | `DemoMarketDataConnector` | 6 | `PUBLIC` |
 | `ClientDocumentConnector` | 2 | `TENANT_PRIVATE` (`clientA`, `clientB`) |
 | `PremiumVendorConnector` | 2 | `ENTITLEMENT_RESTRICTED` (`premium-research`) |
-| `PolicyDocumentConnector` | 10 | `PUBLIC` |
 
-Document types: `NEWS`, `SUMMARY`, `FILING`, `REPORT`, `EARNINGS_TRANSCRIPT`, `POLICY`,
+Document types: `NEWS`, `SUMMARY`, `FILING`, `REPORT`, `EARNINGS_TRANSCRIPT`,
 `ANALYST_COMMENTARY`, `PROMOTER_ACTIVITY`, `PROMOTER_COMMENTARY`.
 
 ### 3.2 Ingestion pipeline
@@ -232,9 +232,9 @@ different tool sets:
 | Persona | Tools | Purpose |
 | --- | --- | --- |
 | supervisor | none | Routing only. Must return strict JSON. |
-| equity-agent | `searchStockNews`, `getLiveStockNews`, `getLiveStockPrice`, `searchPolicies` | Companies, prices, filings, earnings |
-| index-agent | `getIndexData`, `searchPolicies` | Index levels, constituents, sector weights |
-| commodity-agent | `getCommodityData`, `searchPolicies` | Oil, gold, silver, gas |
+| equity-agent | `searchStockNews`, `getLiveStockNews`, `getLiveStockPrice` | Companies, prices, filings, earnings |
+| index-agent | `getIndexData` | Index levels, constituents, sector weights |
+| commodity-agent | `getCommodityData` | Oil, gold, silver, gas |
 
 Each agent publishes an `AgentCapability` (`name`, `description`, `exampleQueries`) which doubles as
 the catalogue the supervisor reasons over. Deliberately no large keyword lists there — the LLM router
@@ -404,7 +404,8 @@ could assert any tenant — the isolation was advisory. Claims are signed and ve
 
 **5. One shared vector store rather than one per domain.**
 Ingestion previously wrote to a store retrieval never read, so the RAG path was inert. Sharing one
-store means one ingestion pipeline and one access predicate cover market data and policy documents.
+store means one ingestion pipeline and one access predicate cover public market data,
+tenant-private research and entitlement-restricted vendor research.
 *Trade-off:* an embedding failure affects every retrieval path at once — mitigated by degrading to
 live APIs, but in production the stores have different availability profiles.
 
@@ -417,12 +418,7 @@ return type is assignable from `Function`/`Supplier`/`Consumer` — which includ
 `Object` silently removed all four market-data tools and made the application unstartable. A test now
 encodes the constraint.
 
-**8. Policies exposed as a shared tool on all three agents.**
-Policy documents are cross-cutting enterprise knowledge, not a market domain, so they do not belong
-to one agent and adding a fourth agent purely for policies would add routing surface for little gain.
-*Trade-off:* every agent carries one extra tool in its selection prompt.
-
-**9. In-memory vector store and cache for the demo.**
+**8. In-memory vector store and cache for the demo.**
 Zero external dependencies, which keeps the demo runnable and the focus on the architecture.
 *Trade-off:* state is lost on restart and does not scale horizontally. Production path is Qdrant or
 pgvector, and Redis for the cache — both behind existing interfaces (`VectorStore`, `ProductionCache`).
@@ -457,10 +453,10 @@ These are deliberate demo simplifications, not oversights — do not claim other
 
 | Module | Tests |
 | --- | ---: |
-| `ai-assistant` | 52 |
+| `ai-assistant` | 46 |
 | `token-broker` | 6 |
 | `evaluation-harness` | 8 |
-| **Total** | **66** |
+| **Total** | **60** |
 
 Coverage highlights:
 
@@ -468,7 +464,7 @@ Coverage highlights:
   test that an anonymous caller cannot reach entitlement documents through an empty `tenantId`, and
   that grouping survives being ANDed with the ticker clause.
 - **Routing** — fast path, fan-out, ambiguity deferral, configured thresholds.
-- **Ingestion** — filter rules, metadata preservation, policy exemption, idempotent document ids.
+- **Ingestion** — filter rules, metadata preservation, idempotent document ids.
 - **Tool contract** — no `@Tool` method returns a type Spring AI would discard.
 - **Context load** — the whole application context starts; this is what caught three
   startup-blocking defects that compilation could not.

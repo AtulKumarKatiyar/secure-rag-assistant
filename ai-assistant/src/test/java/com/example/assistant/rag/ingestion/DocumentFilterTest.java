@@ -58,30 +58,6 @@ class DocumentFilterTest {
         assertThat(filter.isRelevant(marketDocument("AAPL", "Reuters", longText(), metadata, NOW))).isFalse();
     }
 
-    /**
-     * Policies carry no ticker and are not market data, so they bypass the ticker allowlist,
-     * source allowlist, staleness window and financial-signal heuristic.
-     */
-    @Test
-    void acceptsPolicyDocumentsWithoutATickerOrMarketSource() {
-        var document = new RagDocument(
-                "remote-work-policy", "", "", DocumentType.POLICY,
-                "Remote Work Policy", "Policy Repository", "policy://remote-work-policy",
-                NOW, longText(), publicMetadata());
-
-        assertThat(filter.isRelevant(document)).isTrue();
-    }
-
-    @Test
-    void stillRequiresAccessMetadataOnPolicyDocuments() {
-        var document = new RagDocument(
-                "remote-work-policy", "", "", DocumentType.POLICY,
-                "Remote Work Policy", "Policy Repository", "policy://remote-work-policy",
-                NOW, longText(), Map.of());
-
-        assertThat(filter.isRelevant(document)).isFalse();
-    }
-
     private static RagDocument marketDocument(String ticker,
                                               String source,
                                               String text,

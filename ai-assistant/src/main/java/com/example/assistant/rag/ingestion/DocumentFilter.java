@@ -44,12 +44,6 @@ public class DocumentFilter {
         if (!hasValidAccessMetadata(document)) {
             return false;
         }
-        // Policies are curated enterprise documents, not market data: they carry no ticker and
-        // are not subject to the market-source allowlist, staleness window or financial-signal
-        // heuristic. Access metadata is still mandatory, which is why it is checked first.
-        if (document.documentType() == DocumentType.POLICY) {
-            return true;
-        }
         if (document.ticker() == null || !TRACKED_TICKERS.contains(document.ticker().toUpperCase(Locale.ROOT))) {
             return false;
         }
@@ -84,9 +78,6 @@ public class DocumentFilter {
     }
 
     private boolean isStale(RagDocument document) {
-        if (document.documentType() == DocumentType.POLICY) {
-            return false;
-        }
         return document.publishedAt() == null
                 || document.publishedAt().isBefore(clock.instant().minus(180, ChronoUnit.DAYS));
     }

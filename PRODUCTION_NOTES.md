@@ -73,7 +73,7 @@ Suggested TTLs:
 - Live prices: 15-30 seconds
 - Index/commodity snapshots: 30-60 seconds
 - News/tool responses: 1-5 minutes
-- Policy/static documents: 1-24 hours
+- Static research documents: 1-24 hours
 
 ## Tenant-Aware Retrieval
 
@@ -214,7 +214,6 @@ visibility == PUBLIC OR tenantId == clientA OR entitlementGroup == premium-resea
 - Caller tenant and entitlement groups derived from verified JWT claims, never from the request body.
 - Fail-closed, visibility-scoped metadata filtering on every retrieval.
 - Ingestion and retrieval share one vector store; chunks are keyed by chunk id so re-ingestion overwrites.
-- Policy documents ingested through the same pipeline and served by `searchPolicies`.
 - Supervisor clarification requests surfaced to the caller instead of being silently re-routed.
 - Routing thresholds (`min-score`, `fanout-score-gap`, `max-agents`) actually applied.
 - Tenant-safe in-memory cache abstraction.
