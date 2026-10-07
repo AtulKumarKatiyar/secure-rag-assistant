@@ -11,6 +11,14 @@ This project is an interview-ready Spring Boot demo for a secure financial assis
 
 The demo uses a mock HS256 token broker so the secure path runs locally. In production, that broker can be swapped for Keycloak client-credentials or token-exchange flow while keeping the assistant and secured API contracts the same.
 
+## Documentation
+
+| Document | Contents |
+| --- | --- |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Request flow, RAG pipeline, access predicate, multi-agent routing, security model, optimisations, architectural decisions and honest limitations. |
+| [INTERVIEW_QA.md](INTERVIEW_QA.md) | Anticipated questions with grounded answers, plus a demo script. |
+| [PRODUCTION_NOTES.md](PRODUCTION_NOTES.md) | Model tuning, vector-store choice, caching, tenant-aware retrieval and the production gap list. |
+
 ## Modules
 
 | Module | Port | Purpose |

@@ -208,6 +208,8 @@ visibility == PUBLIC OR tenantId == clientA OR entitlementGroup == premium-resea
 - Multi-agent supervisor.
 - Equity, index and commodity agents.
 - Scoped tools for stock, index and commodity APIs.
+- Bedrock Converse configured for production chat/tool-calling.
+- Bedrock Titan configured for production RAG embeddings.
 - JWT-authenticated `/chat` and `/rag/ingest`, with per-endpoint scopes.
 - Caller tenant and entitlement groups derived from verified JWT claims, never from the request body.
 - Fail-closed, visibility-scoped metadata filtering on every retrieval.
