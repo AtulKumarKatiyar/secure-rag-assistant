@@ -13,6 +13,205 @@ Related: [ARCHITECTURE.md](ARCHITECTURE.md), [AGENT_ROUTING.md](AGENT_ROUTING.md
 
 # Part 1 — RAG Questions (11–30)
 
+## Plain-English Primer: How the RAG Pipeline Actually Works
+
+Read this before the numbered answers. The formal answer to question 11 is written for an interviewer
+who already knows RAG; this version is what you would actually say out loud to build up to it.
+
+### The one-sentence version
+
+RAG means: **before anyone asks a question, we take all our documents, cut them into small pieces, and
+store them in a way that lets us later find "the pieces most similar to this question."**
+
+Everything else is detail.
+
+### Why there are four stages
+
+Each stage exists because skipping it would cause a specific problem.
+
+| Stage | The problem it solves |
+| --- | --- |
+| **Connector** | Sources all look different. One returns JSON, one returns files, one returns database rows. |
+| **Filter** | Some documents are junk. Storing junk means finding junk later. |
+| **Chunker** | A whole document is too big to search precisely and too big to feed the model. |
+| **Embed + store** | So we can find the right pieces by *meaning* rather than by keyword. |
+
+### Stage 1 — Connector: put everything in the same box
+
+A **connector** is a small piece of code that knows where to get documents from and how to turn them
+into the standard shape. Downstream code never needs to know whether the source was an API, a file or a
+database.
+
+That standard shape is `RagDocument`:
+
+```text
+id            : NEWS-AAPL-001
+ticker        : AAPL
+companyName   : Apple Inc.
+documentType  : NEWS
+title         : Apple expands enterprise AI features
+source        : Mock Financial News
+url           : https://example.com/news-aapl-001
+publishedAt   : 2026-09-15T12:00:00Z
+rawText       : "Apple announced new enterprise AI features ..."
+metadata      : { visibility: PUBLIC, tenantId: "", sector: Technology }
+```
+
+Think of a mailroom. Letters arrive in all sorts of formats. The connector opens each one and puts the
+contents into an identical company envelope. After that, nobody downstream cares where it came from.
+
+This project has four connectors: market data, client private research, premium vendor reports, and
+policy files.
+
+### Stage 2 — Filter: throw away the junk before storing it
+
+The filter asks a series of yes/no questions, and **one "no" means the document is dropped.**
+
+| Check | Example | Result |
+| --- | --- | --- |
+| Is it at least 300 characters? | `"AAPL moved slightly in pre-market trading."` (40 chars) | ❌ dropped — too short |
+| Is the ticker one we track? | a document about `ZZZZ` | ❌ dropped |
+| Is the source trusted? | a document from `"Random Blog"` | ❌ dropped |
+| **Do we know who may see it?** | a document with no `visibility` field | ❌ **dropped** |
+| Is it recent enough? | a market document from 200 days ago | ❌ dropped |
+| Does it mention anything financial? | none of revenue, profit, guidance, earnings, margin, dividend… | ❌ dropped |
+
+A good document passes all six: long enough, known ticker, trusted source, has access metadata, recent,
+and contains financial signal.
+
+**Why the access-metadata check matters most.** If a document arrives with no `visibility` and no
+`tenantId`, we genuinely do not know whether it is public or belongs to one client. A document we cannot
+classify is a document we cannot safely serve, so it never enters the index.
+
+**Why filter at all?** Retrieval can only return what is in the index. Store junk at ingestion and the
+search will confidently hand junk to the model, which will then write a confident answer based on it.
+
+### Stage 3 — Chunker: cut big documents into small pieces
+
+One long document causes two problems. It is *about* many things, so embedding it as one lump produces an
+averaged-out meaning that matches nothing well. And you cannot feed a whole document into the model's
+context for every question.
+
+So we cut it into paragraphs:
+
+```text
+Before (one document):
+  "Apple announced new enterprise AI features for business customers...
+   Analysts said the announcement could support services revenue...
+   The news is relevant because investors are watching Apple's services margin..."
+
+After (three chunks):
+  Chunk 0: "Apple announced new enterprise AI features for business customers..."
+  Chunk 1: "Analysts said the announcement could support services revenue..."
+  Chunk 2: "The news is relevant because investors are watching Apple's services margin..."
+```
+
+Each chunk becomes its own searchable unit and **inherits a copy of the parent's metadata**, which is why
+access control still works after chunking:
+
+```text
+chunkId    : NEWS-AAPL-001-chunk-1
+documentId : NEWS-AAPL-001
+ticker     : AAPL
+visibility : PUBLIC          <-- copied from the parent
+text       : "Analysts said the announcement could support services revenue..."
+```
+
+**Why paragraphs rather than fixed-size slices?** A paragraph usually holds one idea. Cutting at a fixed
+character count would slice sentences in half and lose meaning. This is also why tables break — a table is
+not a paragraph, so it gets shredded. That is a known weakness in this project.
+
+**Why the chunk id format matters:** it is built from the document id plus a number
+(`NEWS-AAPL-001-chunk-1`), so re-ingesting produces the *same* ids and overwrites rather than duplicating.
+That makes ingestion safe to re-run.
+
+### Stage 4 — Embed and store: turn meaning into numbers
+
+An **embedding** is a long list of numbers representing the *meaning* of a piece of text. Texts with
+similar meaning end up with similar numbers **even when they share no words**:
+
+```text
+"Our revenue beat expectations"      -> [0.21, -0.44, 0.87, ...]
+"The company posted stronger sales"  -> [0.19, -0.41, 0.85, ...]   <-- close
+"The weather in Mumbai is humid"     -> [-0.73, 0.12, -0.02, ...]  <-- far away
+```
+
+Keyword search finds nothing in common between the first two. Embeddings know they mean nearly the same
+thing.
+
+Each chunk is stored as three things joined together:
+
+| Stored | Purpose |
+| --- | --- |
+| **numbers** — the embedding | for finding it |
+| **text** | what the model eventually reads |
+| **metadata** | for filtering relevance and permission |
+
+### Now, query time
+
+A user asks: **"What is happening with Apple's services business?"**
+
+```text
+1. Embed the question                          -> [0.20, -0.40, 0.86, ...]
+
+2. Compare those numbers against every stored chunk
+   -> chunk NEWS-AAPL-001-chunk-1 scores 0.89
+   -> chunk TRANSCRIPT-NVDA-001-chunk-0 scores 0.31
+
+3. At the same time, check the metadata:
+      ticker == 'AAPL'                            is it about the right thing?
+      visibility == PUBLIC, or tenantId == mine?  am I allowed to see it?
+      publishedAtEpochMs recent enough?           is it stale?
+      entitlementGroup matches mine?              have I paid for it?
+
+4. Keep the best 5 that pass all of it
+
+5. Put those 5 chunks of TEXT into the model's context and let it answer
+```
+
+**The important part: steps 2 and 3 happen together, in one search.** We do not fetch the best matches and
+then discard the ones the user may not see. We filter *while* searching.
+
+**Why that matters.** If you fetch the top 5 first and filter afterwards, and all 5 happen to be private
+documents belonging to another client, you end up with nothing — even though good public documents sit
+further down the list. Filtering inside the search means the 5 slots are spent on documents that are both
+relevant *and* permitted.
+
+This is also why access control lives here rather than later: a document the user may not see is never
+even a candidate.
+
+### The whole pipeline in one picture
+
+```text
+INGESTION  (ahead of time, on a schedule)
+
+  market API ──┐
+  client docs ─┼─> Connector ─> Filter ─> Chunker ─> Embed ─> Vector store
+  vendor feed ─┤   same box     drop      split into  numbers   numbers
+  policies ────┘                junk      paragraphs  per chunk + text + metadata
+
+QUERY  (per question)
+
+  "What is happening with Apple's services business?"
+        |
+        +--> embed the question
+        |
+        +--> ONE search doing both at once:
+                 find similar numbers
+                 AND check ticker / permission / freshness
+        |
+        +--> top 5 chunks of text  -->  model  -->  answer
+```
+
+### If you only remember three sentences
+
+1. **Connectors** put every source into the same box.
+2. **The filter and chunker** make sure only good, small, correctly-labelled pieces get stored.
+3. **Retrieval** finds pieces that are both *similar in meaning* and *allowed for this user*, in a single
+   search.
+
+---
+
 **11. Walk me through the RAG pipeline.**
 Four stages. **Ingest** — connectors normalise market data, client research, vendor reports and
 policies into one common document shape. **Filter** — reject anything too short, from an unknown
