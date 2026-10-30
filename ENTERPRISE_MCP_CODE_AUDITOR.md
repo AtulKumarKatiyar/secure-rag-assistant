@@ -101,10 +101,10 @@ flowchart TD
 This workflow maps how the agent aids a software engineer during the delivery of a feature ticket (e.g., `PAY-204: Add exponential backoff retry to PaymentService`).
 
 ```
-PHASE 1: LOCAL AUDIT (IntelliJ)
+PHASE 1: LOCAL PRE-COMMIT AUDIT (IntelliJ)
   Developer prompts: "@code-auditor Review my local method against PAY-204"
         │
-        ├──► Agent queries Jira MCP (Reads criteria & retry limits)
+        ├──► Agent queries Jira MCP (Reads acceptance criteria & retry limits)
         ├──► Agent queries Semgrep MCP (Runs static check on snippet)
         └──► Streams bug diagnosis: Flags non-thread-safe state & provides fix
   Developer applies fix with verified behavior parity.
@@ -112,60 +112,108 @@ PHASE 1: LOCAL AUDIT (IntelliJ)
 PHASE 2: COMMIT & MR CREATION
   Developer prompts: "@code-auditor Generate GitLab MR description"
         │
-        └──► Agent outputs formatted description with test plan
+        └──► Agent outputs formatted description with test checklist
   Developer commits & pushes branch to GitLab: git push origin feature/PAY-204
+  Developer creates GitLab Merge Request (MR).
 
-PHASE 3: GITLAB CI PIPELINE RUNS
-  GitLab CI executes Maven/Gradle build, tests, and SonarQube scan
+PHASE 3: GITLAB CI PIPELINE RUNS (The Repo-Wide Safety Net)
+  GitLab CI executes multi-stage pipeline:
+  Stage 1: Compile & Unit Tests (mvn test / npm test)
+  Stage 2: SonarQube Static Analysis & Quality Gate
+  Stage 3: Integration Tests (Testcontainers / Database)
         │
-        └──► ❌ Quality Gate Fails: "Cognitive complexity is 18 (Max: 15)"
+        └──► ❌ CI Pipeline Fails (e.g., Build broken / Quality gate violated)
 
-PHASE 4: POST-PUSH TRIAGE & FIX (IntelliJ)
-  Developer prompts: "@code-auditor SonarQube failed on my MR. Fix it."
+PHASE 4: POST-PUSH TRIAGE & REMEDIATION VIA GITLAB & SONAR MCP (IntelliJ)
+  Developer prompts: "@code-auditor Why did my GitLab CI pipeline fail? Fix it."
         │
-        ├──► Agent queries SonarQube MCP (Fetches exact rule & line numbers)
-        └──► Streams refactored helper methods (Reduces complexity to 8)
-  Developer pushes fix: git commit -am "refactor: fix sonar" && git push
-  GitLab CI re-runs: ✅ All Quality Gates Turn Green!
+        ├──► Agent queries GitLab MCP:
+        │     - Calls gitlab.get_pipeline_jobs() -> Identifies failed job: 'mvn-test'
+        │     - Calls gitlab.get_job_log() -> Extracts terminal stacktrace & failed tests
+        ├──► Agent queries SonarQube MCP:
+        │     - Calls sonar.get_issues() -> Fetches code smells & missing coverage
+        └──► Streams exact diagnosis & code fix directly into IntelliJ chat!
+  Developer applies fix, commits & pushes: git commit -am "fix: resolve CI failure" && git push
+  GitLab CI re-runs: ✅ All Stages Turn Green!
 
-PHASE 5: MERGE
-  MR is reviewed, approved, and merged into main branch.
+PHASE 5: AUTOMATED VERIFICATION & MR MERGE
+  MR is approved with full audit trail and merged into main.
 ```
+
+---
+
+### The "Enterprise MCP Trio": How the Pieces Fit Together
+
+```
++---------------------------------------------------------------------------------------+
+|                               INTELLIJ COPILOT AGENT                                  |
+|                                                                                       |
+|   +-----------------------+   +-----------------------+   +-----------------------+   |
+|   |    JIRA MCP SERVER    |   |   GITLAB MCP SERVER   |   |  SONARQUBE MCP SERVER |   |
+|   +-----------+-----------+   +-----------+-----------+   +-----------+-----------+   |
++---------------|---------------------------|---------------------------|---------------+
+                |                           |                           |
+                v                           v                           v
+      "WHAT should I build?"       "DID the build pass?       "IS the code clean,
+       - Requirements & specs       What broke in CI?"         secure & well-tested?"
+       - Acceptance criteria        - Pipeline status & jobs   - Quality Gates
+       - Edge cases to cover        - Raw job terminal logs    - Code smell details
+                                    - MR diffs & comments      - Coverage percentages
+```
+
+---
+
+### Why Does Phase 3 Fail If Phase 1 Already Passed?
+
+A common question: *"If `@code-auditor` reviewed my code in Phase 1, why would the build ever fail in Phase 3?"*
+
+**Phase 1 is a micro-level local audit** (inspecting active files/methods). **Phase 3 is a macro-level system integration** across the entire repository. The table below details why Phase 3 acts as the ultimate safety net:
+
+| Failure Scenario in Phase 3 | Why Local Phase 1 Didn't Catch It | How Phase 4 (GitLab & Sonar MCP) Resolves It |
+| :--- | :--- | :--- |
+| **1. Missing Code Coverage** | Phase 1 checked logic correctness, but you forgot to write new unit tests. SonarQube requires $\ge 80\%$ coverage on new code. | Sonar MCP reports the uncovered branches; Agent automatically generates the missing JUnit/Mock tests. |
+| **2. Cross-Module Breaking Change** | You changed a method signature in `PaymentService.java`. Phase 1 only saw your file, but `OrderController.java` elsewhere in the repo now fails to compile. | GitLab MCP inspects the `mvn compile` log, points out `OrderController.java:88`, and updates the caller. |
+| **3. Integration Test Failures** | Heavy integration tests (Postgres, Kafka, Docker) only run in CI. A foreign key constraint or DB migration script failed. | GitLab MCP reads the terminal stacktrace from `get_job_log()` and explains the exact database constraint violation. |
+| **4. Third-Party CVE Vulnerabilities** | You added an external library in `pom.xml`. Security scanners (Snyk/Semgrep) in CI block the pipeline due to a critical CVE. | GitLab/Semgrep MCP flags the vulnerable dependency and suggests an upgraded, non-vulnerable version. |
+| **5. Branch Outdated vs. `main`** | Teammates merged code into `main` while you were working. GitLab CI tests your branch against the latest target branch. | GitLab MCP detects the contract conflict and guides conflict resolution. |
+
+---
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Dev as Developer (IntelliJ)
-    participant Agent as @code-auditor (AWS Fargate)
-    participant MCP as MCP Tool Servers
-    participant GL as GitLab Repo & CI
-    participant Sonar as SonarQube
+    participant Agent as @code-auditor (AWS Fargate MCP Host)
+    participant JiraMCP as Jira MCP Server
+    participant GLMCP as GitLab MCP Server
+    participant SonarMCP as SonarQube MCP Server
+    participant GLCI as GitLab CI/CD Pipeline
 
-    Note over Dev, Agent: Phase 1: Local Pre-Commit Audit
+    Note over Dev, JiraMCP: Phase 1: Local Pre-Commit Audit
     Dev->>Agent: @code-auditor Review method against PAY-204
-    Agent->>MCP: Call jira.get_issue(PAY-204)
-    MCP-->>Agent: Returns criteria & retry requirements
-    Agent-->>Dev: Streams bug fix (non-thread-safe counter)
+    Agent->>JiraMCP: Call get_issue(PAY-204)
+    JiraMCP-->>Agent: Returns acceptance criteria & retry rules
+    Agent-->>Dev: Streams bug fix (concurrency race condition)
     Dev->>Dev: Applies refactored solution
 
-    Note over Dev, GL: Phase 2: Push to GitLab
-    Dev->>GL: git push origin feature/PAY-204
+    Note over Dev, GLCI: Phase 2 & 3: Push & CI Execution
+    Dev->>GLCI: git push origin feature/PAY-204
+    GLCI->>GLCI: Stage 1: Build & Tests (mvn test) -> ❌ FAILED!
 
-    Note over GL, Sonar: Phase 3: Automated CI Execution
-    GL->>Sonar: GitLab CI triggers Sonar-Scanner
-    Sonar-->>GL: ❌ FAILED: Cognitive complexity is 18 (Max 15)
+    Note over Dev, GLMCP: Phase 4: Post-Push Triage via GitLab MCP
+    Dev->>Agent: @code-auditor Why did my GitLab CI pipeline fail? Fix it.
+    Agent->>GLMCP: Call get_pipeline_jobs(pipeline_id)
+    GLMCP-->>Agent: Returns failed job: 'mvn-test' (job_id: 89412)
+    Agent->>GLMCP: Call get_job_log(job_id: 89412)
+    GLMCP-->>Agent: Returns stacktrace: "AssertionError: expected 3 retries got 0"
+    Agent->>SonarMCP: Call get_quality_gate_status()
+    SonarMCP-->>Agent: Returns coverage & smells
+    Agent-->>Dev: Streams exact diagnosis & code fix for test mock
+    Dev->>GLCI: git commit -am "fix: test mock" && git push
+    GLCI->>GLCI: CI Re-runs -> ✅ All Stages Green!
 
-    Note over Dev, Agent: Phase 4: Post-Push Triage & Fix
-    Dev->>Agent: @code-auditor SonarQube failed. Fix it.
-    Agent->>MCP: Call sonarqube.get_issues(file)
-    MCP-->>Agent: Returns complexity violation
-    Agent-->>Dev: Streams refactored code (complexity reduced to 8)
-    Dev->>GL: git commit & git push
-    GL->>Sonar: CI Re-runs
-    Sonar-->>GL: ✅ PASSED: Quality Gate OK
-
-    Note over Dev, GL: Phase 5: Merge
-    GL-->>Dev: MR approved and merged into main.
+    Note over Dev, GLCI: Phase 5: Merge
+    GLCI-->>Dev: MR approved & merged into main.
 ```
 
 ---
@@ -325,15 +373,16 @@ You are the **Senior Enterprise Code Reviewer & Bug Auditor**.
 Your environment uses GitLab for source control, Jira for specifications, and SonarQube for static analysis.
 
 You have dynamic access to external tools via the **Model Context Protocol (MCP)**:
-- Call Jira tools to fetch ticket acceptance criteria when an issue key is referenced.
-- Call SonarQube tools to look up open bugs, smells, or quality gate status.
-- Call GitLab tools to view MR diffs or repository context.
+- **Jira MCP:** Call Jira tools to fetch ticket acceptance criteria, story requirements, and edge cases.
+- **GitLab MCP:** Call GitLab tools to inspect Merge Requests, fetch pipeline statuses (`get_pipeline_jobs`), and pull raw terminal logs (`get_job_log` / `get_job_trace`) when a CI build fails.
+- **SonarQube MCP:** Call Sonar tools to look up open bugs, cognitive complexity violations, security hotspots, and quality gate metrics.
 
 ### Instructions:
 1. When asked to audit code, invoke the necessary MCP tools autonomously.
-2. Cross-reference code implementation with Jira requirements.
-3. Guarantee strict **behavior parity** on any suggested refactoring.
-4. Provide structured, production-ready solutions with verification plans.
+2. If the user mentions a failed CI pipeline or build, query GitLab MCP for the failing job, extract the terminal stacktrace, and diagnose the root cause.
+3. Cross-reference code implementation with Jira requirements.
+4. Guarantee strict **behavior parity** on any suggested refactoring.
+5. Provide structured, production-ready solutions with verification plans.
 `;
 
     let currentMessages: any[] = [
@@ -488,3 +537,8 @@ flowchart LR
 
 ### Q: How is behavior parity guaranteed during code refactoring?
 > **Answer:** "The agent's system prompt strictly enforces behavioral invariance: inputs, outputs, exceptions, and side effects must remain functionally identical. Furthermore, the agent generates regression unit tests covering edge cases identified during static analysis to mathematically prove behavior parity before human merge."
+
+### Q: How does the agent triage and resolve GitLab CI pipeline failures without the developer opening a browser?
+> **Answer:** "The agent acts as an MCP Host connected to the official GitLab MCP Server. When a developer asks about a broken pipeline, the LLM calls `gitlab__get_pipeline_jobs` to identify the failing job, followed by `gitlab__get_job_log` (or `get_job_trace`) to extract the terminal logs and stacktrace.
+> 
+> The LLM correlates this CI error with the active code open in IntelliJ, isolates the root cause (such as an unmocked integration call or compilation failure), and streams a drop-in code fix directly into the IDE chat."
