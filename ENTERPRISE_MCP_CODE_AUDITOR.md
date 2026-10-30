@@ -8,53 +8,90 @@ This document details the production-grade architecture, implementation, and end
 
 The system leverages **Model Context Protocol (MCP)** as a standardized abstraction layer connecting an IDE (IntelliJ IDEA via GitHub Copilot) to enterprise developer platforms (**Jira, GitLab, SonarQube, and Semgrep**).
 
-### High-Level System Architecture
+> **Viewing in IntelliJ IDEA?**  
+> If Mermaid diagrams show as raw text, enable IntelliJ's built-in Mermaid renderer:  
+> Go to **Settings/Preferences (`Cmd + ,`)** → **Languages & Frameworks** → **Markdown** → enable **Mermaid** (or install the free JetBrains **Mermaid** plugin).  
+> *Universal visual ASCII diagrams are also provided below for guaranteed visibility in any viewer.*
+
+---
+
+### High-Level System Architecture Diagram
+
+```
++---------------------------------------------------------------------------------------+
+|  DEVELOPER WORKSTATION                                                                |
+|  IntelliJ IDEA (GitHub Copilot Chat)                                                  |
+|  Prompt: "@code-auditor Review my local method against PAY-204"                       |
++-------------------------------------------+-------------------------------------------+
+                                            |
+                         1. Prompts Agent   |   6. Real-Time Token Stream (SSE)
+                                            v
++---------------------------------------------------------------------------------------+
+|  GITHUB COPILOT CLOUD (Routing Gateway)                                               |
+|  Matches @code-auditor -> Forwards webhook HTTP POST to registered AWS URL            |
++-------------------------------------------+-------------------------------------------+
+                                            |
+                   2. Webhook Forwarding    |   5. SSE Chunks ("data: { choices: ... }")
+                                            v
++---------------------------------------------------------------------------------------+
+|  AWS ECS ON FARGATE (Your Enterprise VPC Private Subnet)                              |
+|                                                                                       |
+|  +---------------------------------------------------------------------------------+  |
+|  | AGENT ORCHESTRATOR SERVICE (Express.js + MCP Client Host)                       |  |
+|  | - Listens on /agent (Receives prompt + code context)                            |  |
+|  | - Autonomous Tool-Calling Loop with LLM (OpenAI / Gemini / Claude)              |  |
+|  +----------------------------------------+----------------------------------------+  |
+|                                           |                                           |
+|                   3. MCP Protocol         |   3. Tool Responses                       |
+|                   (JSON-RPC 2.0)          |   (Standardized Schema)                   |
+|                                           v                                           |
+|  +---------------------------------------------------------------------------------+  |
+|  | ENTERPRISE MCP SERVERS (Standardized Tool Abstraction Layer)                    |  |
+|  |                                                                                 |  |
+|  |  [ Jira MCP Server ]      [ GitLab MCP Server ]     [ SonarQube MCP Server ]    |  |
+|  |  (Fetches criteria)       (Fetches MR diffs)        (Fetches smells & gates)    |  |
+|  +-------------+--------------------------+--------------------------+-------------+  |
++----------------|--------------------------|--------------------------|----------------+
+                 |                          |                          |
+                 v                          v                          v
+      [ Jira Cloud / DC ]          [ GitLab Enterprise ]       [ SonarQube Server ]
+```
 
 ```mermaid
 flowchart TD
-    subgraph DeveloperWorkstation["Developer Workstation"]
-        IntelliJ["IntelliJ IDEA\n(GitHub Copilot Chat)"]
+    subgraph Station["1. Developer Machine"]
+        IDEA["IntelliJ IDEA<br/>(Copilot Chat)"]
     end
 
-    subgraph GitHubPlatform["GitHub Copilot Cloud"]
-        GHExtension["Copilot Routing Gateway\n(@code-auditor Webhook)"]
+    subgraph GitHub["2. GitHub Copilot Cloud"]
+        Gateway["Copilot Gateway<br/>(@code-auditor routing)"]
     end
 
-    subgraph AWSCloud["AWS ECS on Fargate (VPC Private Subnet)"]
-        subgraph AgentOrchestrator["Agent Orchestrator Service (MCP Host)"]
-            SSEAdapter["Copilot SSE Adapter\n(Express.js)"]
-            MCPHost["MCP Client Core\n(@modelcontextprotocol/sdk)"]
-            ToolRouter["Dynamic Tool Calling Engine"]
-        end
-
-        subgraph MCPServers["Enterprise MCP Servers (Tool Layer)"]
-            JiraMCP["Jira MCP Server\n(Issues & Acceptance Criteria)"]
-            GitLabMCP["GitLab MCP Server\n(MRs, Branches, Diffs)"]
-            SonarMCP["SonarQube MCP Server\n(Quality Gates & Smells)"]
-            SemgrepMCP["Semgrep MCP Server\n(SAST Security Rules)"]
-        end
+    subgraph AWS["3. AWS Fargate (Private VPC)"]
+        Orchestrator["Agent Orchestrator<br/>(MCP Host & SSE Adapter)"]
+        JiraMCP["Jira MCP Server"]
+        GitLabMCP["GitLab MCP Server"]
+        SonarMCP["SonarQube MCP Server"]
     end
 
-    subgraph EnterpriseInfra["Enterprise Infrastructure"]
-        JiraCloud["Jira Cloud / Data Center"]
-        GitLabInstance["GitLab Enterprise Server"]
-        SonarQubeInstance["SonarQube Server"]
-        LLMProvider["LLM API\n(OpenAI GPT-4o / Claude 3.5 / Gemini)"]
+    subgraph External["4. Enterprise Systems"]
+        Jira["Jira Cloud"]
+        GitLab["GitLab Server"]
+        Sonar["SonarQube"]
+        LLM["LLM Provider (GPT-4o)"]
     end
 
-    %% Interactions
-    IntelliJ -->|"1. User prompts: @code-auditor"| GHExtension
-    GHExtension -->|"2. Webhook forwarding (HTTP POST)"| SSEAdapter
-    SSEAdapter --> MCPHost
-    MCPHost <-->|"3. List & call tools (JSON-RPC)"| MCPServers
-    
-    JiraMCP <--> JiraCloud
-    GitLabMCP <--> GitLabInstance
-    SonarMCP <--> SonarQubeInstance
-    
-    MCPHost <-->|"4. Multi-turn Tool Calling"| LLMProvider
-    SSEAdapter -->|"5. Stream tokens via SSE"| GHExtension
-    GHExtension -->|"6. Render stream real-time"| IntelliJ
+    IDEA -->|"1. User Prompt"| Gateway
+    Gateway -->|"2. Webhook POST"| Orchestrator
+    Orchestrator <-->|"3. JSON-RPC"| JiraMCP
+    Orchestrator <-->|"3. JSON-RPC"| GitLabMCP
+    Orchestrator <-->|"3. JSON-RPC"| SonarMCP
+    JiraMCP <--> Jira
+    GitLabMCP <--> GitLab
+    SonarMCP <--> Sonar
+    Orchestrator <-->|"4. Function Calling"| LLM
+    Orchestrator -->|"5. SSE Stream"| Gateway
+    Gateway -->|"6. Render Stream"| IDEA
 ```
 
 ---
@@ -63,45 +100,72 @@ flowchart TD
 
 This workflow maps how the agent aids a software engineer during the delivery of a feature ticket (e.g., `PAY-204: Add exponential backoff retry to PaymentService`).
 
+```
+PHASE 1: LOCAL AUDIT (IntelliJ)
+  Developer prompts: "@code-auditor Review my local method against PAY-204"
+        │
+        ├──► Agent queries Jira MCP (Reads criteria & retry limits)
+        ├──► Agent queries Semgrep MCP (Runs static check on snippet)
+        └──► Streams bug diagnosis: Flags non-thread-safe state & provides fix
+  Developer applies fix with verified behavior parity.
+
+PHASE 2: COMMIT & MR CREATION
+  Developer prompts: "@code-auditor Generate GitLab MR description"
+        │
+        └──► Agent outputs formatted description with test plan
+  Developer commits & pushes branch to GitLab: git push origin feature/PAY-204
+
+PHASE 3: GITLAB CI PIPELINE RUNS
+  GitLab CI executes Maven/Gradle build, tests, and SonarQube scan
+        │
+        └──► ❌ Quality Gate Fails: "Cognitive complexity is 18 (Max: 15)"
+
+PHASE 4: POST-PUSH TRIAGE & FIX (IntelliJ)
+  Developer prompts: "@code-auditor SonarQube failed on my MR. Fix it."
+        │
+        ├──► Agent queries SonarQube MCP (Fetches exact rule & line numbers)
+        └──► Streams refactored helper methods (Reduces complexity to 8)
+  Developer pushes fix: git commit -am "refactor: fix sonar" && git push
+  GitLab CI re-runs: ✅ All Quality Gates Turn Green!
+
+PHASE 5: MERGE
+  MR is reviewed, approved, and merged into main branch.
+```
+
 ```mermaid
 sequenceDiagram
     autonumber
     actor Dev as Developer (IntelliJ)
-    participant Agent as @code-auditor (AWS Fargate MCP Host)
+    participant Agent as @code-auditor (AWS Fargate)
     participant MCP as MCP Tool Servers
-    participant GL as GitLab Repo & CI/CD
-    participant Sonar as SonarQube / Semgrep
+    participant GL as GitLab Repo & CI
+    participant Sonar as SonarQube
 
     Note over Dev, Agent: Phase 1: Local Pre-Commit Audit
-    Dev->>Agent: "@code-auditor Review my local method against PAY-204"
-    Agent->>MCP: Call jira.get_issue("PAY-204")
-    MCP-->>Agent: Returns acceptance criteria & retry limits
-    Agent->>MCP: Call semgrep.scan_snippet(code)
-    MCP-->>Agent: Returns 0 vulnerabilities
-    Agent-->>Dev: Streams bug analysis (Flags non-thread-safe counter & fixes it)
-    Dev->>Dev: Applies refactored solution with behavior parity
+    Dev->>Agent: @code-auditor Review method against PAY-204
+    Agent->>MCP: Call jira.get_issue(PAY-204)
+    MCP-->>Agent: Returns criteria & retry requirements
+    Agent-->>Dev: Streams bug fix (non-thread-safe counter)
+    Dev->>Dev: Applies refactored solution
 
-    Note over Dev, GL: Phase 2: Commit, Push & MR Creation
-    Dev->>Agent: "@code-auditor Generate GitLab MR description"
-    Agent-->>Dev: Outputs standardized MR summary with test checklist
-    Dev->>GL: git commit & git push origin feature/PAY-204
-    Dev->>GL: Create Merge Request on GitLab
+    Note over Dev, GL: Phase 2: Push to GitLab
+    Dev->>GL: git push origin feature/PAY-204
 
     Note over GL, Sonar: Phase 3: Automated CI Execution
-    GL->>Sonar: GitLab CI triggers Unit Tests, Sonar-Scanner & Semgrep
-    Sonar-->>GL: ❌ FAILED: Cognitive complexity is 18 (Max allowed: 15)
+    GL->>Sonar: GitLab CI triggers Sonar-Scanner
+    Sonar-->>GL: ❌ FAILED: Cognitive complexity is 18 (Max 15)
 
-    Note over Dev, Agent: Phase 4: Post-Push Triage & Remediation
-    Dev->>Agent: "@code-auditor SonarQube failed on my MR. Fix it."
-    Agent->>MCP: Call sonarqube.get_issues_for_file("PaymentService.java")
-    MCP-->>Agent: Returns: "Refactor to reduce cognitive complexity from 18 to 15"
-    Agent-->>Dev: Streams drop-in refactored helper methods (reduces complexity to 8)
-    Dev->>GL: git commit -am "refactor: resolve sonar quality gate" & git push
-    GL->>Sonar: GitLab CI Re-runs
+    Note over Dev, Agent: Phase 4: Post-Push Triage & Fix
+    Dev->>Agent: @code-auditor SonarQube failed. Fix it.
+    Agent->>MCP: Call sonarqube.get_issues(file)
+    MCP-->>Agent: Returns complexity violation
+    Agent-->>Dev: Streams refactored code (complexity reduced to 8)
+    Dev->>GL: git commit & git push
+    GL->>Sonar: CI Re-runs
     Sonar-->>GL: ✅ PASSED: Quality Gate OK
 
     Note over Dev, GL: Phase 5: Merge
-    GL-->>Dev: All checks green. MR approved and merged into main.
+    GL-->>Dev: MR approved and merged into main.
 ```
 
 ---
@@ -354,25 +418,51 @@ app.listen(PORT, async () => {
 
 ## 4. AWS Production Deployment Architecture
 
+```
+[ GitHub Cloud Gateway ]
+           │
+           │ HTTPS (Route 53: agent.company.com)
+           ▼
+[ Application Load Balancer (ALB) ]  <-- In AWS Public Subnet (Port 443 + ACM SSL)
+           │
+           │ Forward to Target Group (Port 3000)
+           ▼
++----------------------------------------------------------------------------+
+| AWS VPC PRIVATE SUBNETS                                                    |
+|                                                                            |
+|  [ ECS Fargate Container Tasks ]                                           |
+|  - Runs Node.js / Express Server on Port 3000                              |
+|  - Speaks MCP to Jira, GitLab, and SonarQube                               |
+|                                                                            |
+|         │                                          │                       |
+|         ├── (Outbound via NAT Gateway)             ├── (Direct Private IPs)|
+|         ▼                                          ▼                       |
+|  [ Public LLM API ]                         [ Internal Enterprise Tools ]  |
+|  (OpenAI GPT-4o / Claude / Gemini)          - Internal GitLab Server       |
+|                                             - Internal SonarQube Server    |
+|                                             - Jira Cloud / Data Center     |
++----------------------------------------------------------------------------+
+```
+
 ```mermaid
 flowchart LR
-    GitHubGateway["GitHub Cloud\n(@code-auditor)"] --> Route53["AWS Route 53\n(agent.company.com)"]
-    Route53 --> ALB["Application Load Balancer\n(HTTPS Port 443 + ACM Cert)"]
+    GitHub["GitHub Cloud<br/>(@code-auditor)"] --> Route53["Route 53 DNS<br/>(agent.company.com)"]
+    Route53 --> ALB["Application Load Balancer<br/>(HTTPS 443 + SSL)"]
 
-    subgraph AWSVPC["AWS VPC (10.0.0.0/16)"]
-        subgraph PublicSubnets["Public Subnets"]
-            ALB
-            NATGateway["NAT Gateway"]
-        end
-
-        subgraph PrivateSubnets["Private Subnets"]
-            ALB --> FargateService["ECS Fargate Tasks\n(Container on Port 3000)"]
-            FargateService --> NATGateway
-            FargateService <--> InternalJira["Internal Jira / SonarQube / GitLab"]
-        end
+    subgraph PublicNet["AWS Public Subnet"]
+        ALB
+        NAT["NAT Gateway"]
     end
 
-    NATGateway --> PublicLLM["OpenAI / Gemini / Claude API"]
+    subgraph PrivateNet["AWS Private Subnet"]
+        Fargate["ECS Fargate Tasks<br/>(Port 3000)"]
+        InternalTools["Internal GitLab / SonarQube / Jira"]
+    end
+
+    ALB --> Fargate
+    Fargate --> InternalTools
+    Fargate --> NAT
+    NAT --> LLM["LLM Cloud API<br/>(OpenAI / Claude / Gemini)"]
 ```
 
 ### Why AWS ECS on Fargate over AWS Lambda?
